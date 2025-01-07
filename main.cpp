@@ -1,11 +1,11 @@
-#include <QApplication>
-#include <QLabel>
+#include "mywindow.h"
 
-int main(int argc, char* argv[])    {
-    QApplication app(argc, argv);
-    QLabel *label = new QLabel("Hello World");
-    label->setWindowTitle("MY APP");
-    label->resize(400,400);
-    label->show();
-    return app.exec();
+#include <QApplication>
+
+int main(int argc, char *argv[])
+{
+    QApplication a(argc, argv);
+    MyWindow w;
+    w.show();
+    return a.exec();
 }
