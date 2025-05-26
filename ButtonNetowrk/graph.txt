@@ -1,0 +1,16 @@
+=== Differential Equations ===
+Dy1(w) = -y1
+Dy2(w) = -y2 + 0*relu(y2)
+Dy3(w) = -y3 + 0*tanh(y2) + 0*tanh(y3)
+Dy4(w) = -y4
+Dy5(w) = -y5
+
+=== Weight Values (sij) ===
+s22 = 0
+s23 = 0
+s33 = 0
+
+=== Alpha Constants ===
+α1 = 2.2
+α2 = 2
+α3 = 1.2
