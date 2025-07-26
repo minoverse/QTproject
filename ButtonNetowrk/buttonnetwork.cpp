@@ -11,6 +11,7 @@
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QTextStream>
+#include <QProcess>
 #include <cmath>
 #include <complex>
 
@@ -19,11 +20,8 @@ ButtonNetwork::ButtonNetwork(QWidget *parent) : QWidget(parent) {
     setMouseTracking(true);
 
     bool ok;
-    int userInput = QInputDialog::getInt(
-        this, "Number of Nodes", "How many nodes do you want to create?", 5, 1, 100, 1, &ok);
-    if (ok) {
-        maxNodes = userInput;
-    }
+    int userInput = QInputDialog::getInt(this, "Number of Nodes", "How many nodes?", 5, 1, 100, 1, &ok);
+    if (ok) maxNodes = userInput;
 }
 
 void ButtonNetwork::mousePressEvent(QMouseEvent *event) {
@@ -57,9 +55,9 @@ void ButtonNetwork::showFunctionDialog(QPushButton* start, QPushButton* end) {
 
     QVBoxLayout layout(&dialog);
     QLabel label("Choose function:", &dialog);
-    QRadioButton sinExpButton("1. Sin", &dialog);
-    QRadioButton tanhButton("2. Tanh", &dialog);
-    QRadioButton reluButton("3. ReLU", &dialog);
+    QRadioButton sinExpButton("Sin", &dialog);
+    QRadioButton tanhButton("Tanh", &dialog);
+    QRadioButton reluButton("ReLU", &dialog);
     QPushButton confirmButton("OK", &dialog);
 
     layout.addWidget(&label);
@@ -77,8 +75,7 @@ void ButtonNetwork::showFunctionDialog(QPushButton* start, QPushButton* end) {
 
         QString weightName = "s" + start->text() + end->text();
         bool ok;
-        double weightVal = QInputDialog::getDouble(this, "Weight Value",
-                                                   "Enter value for " + weightName + ":", 0.0, -1000, 1000, 2, &ok);
+        double weightVal = QInputDialog::getDouble(this, "Weight Value", "Enter value for " + weightName + ":", 0.0, -1000, 1000, 2, &ok);
         if (ok) {
             weightValues[weightName] = weightVal;
             connections.append({start, end, color, functionType});
@@ -90,189 +87,195 @@ void ButtonNetwork::showFunctionDialog(QPushButton* start, QPushButton* end) {
     dialog.exec();
 }
 
-void ButtonNetwork::paintEvent(QPaintEvent *event) {
-    QWidget::paintEvent(event);
-    QPainter painter(this);
-    painter.setRenderHint(QPainter::Antialiasing);
-
-    QFont font = painter.font();
-    font.setPointSize(11);
+void ButtonNetwork::paintEvent(QPaintEvent *) {
+    QPainter p(this);
+    p.setRenderHint(QPainter::Antialiasing);
+    QFont font = p.font();
     font.setBold(true);
-    painter.setFont(font);
+    font.setPointSize(10);
+    p.setFont(font);
 
-    for (int i = 0; i < connections.size(); ++i) {
-        const auto& conn = connections[i];
+    for (const auto& conn : connections) {
         QPoint start = conn.start->geometry().center();
         QPoint end = conn.end->geometry().center();
-
         QString label = "s" + conn.start->text() + conn.end->text();
-        double weight = weightValues.value(label, 0.0);
-        painter.setPen(QPen(conn.color, 3));
+        double val = weightValues.value(label, 0.0);
+        p.setPen(QPen(conn.color, 3));
 
         if (conn.start == conn.end) {
-            int radius = 20;
-            QRectF loopRect(start.x() - radius, start.y() - radius - 20, 2 * radius, 2 * radius);
-            painter.drawArc(loopRect, 30 * 16, 300 * 16);
-            painter.drawText(start.x() - 15, start.y() - 35, label + " = " + QString::number(weight));
+            QRectF loop(start.x() - 20, start.y() - 40, 40, 40);
+            p.drawArc(loop, 0, 360 * 16);
+            p.drawText(start.x() - 30, start.y() - 50, label + "=" + QString::number(val));
         } else {
             QPainterPath path;
-            QPointF control;
+            QPointF mid = (start + end) / 2.0;
+            QPointF offset(-(end.y() - start.y()), end.x() - start.x());
+            if (offset.manhattanLength() > 0)
+                offset /= std::sqrt(offset.x() * offset.x() + offset.y() * offset.y());
 
-            int dx = end.x() - start.x();
-            int dy = end.y() - start.y();
-            QPointF normal(-dy, dx);
-            double length = std::sqrt(normal.x() * normal.x() + normal.y() * normal.y());
-            if (length != 0) normal /= length;
-
-            int offsetCount = 0;
-            for (int j = 0; j < i; ++j) {
-                const auto& prev = connections[j];
-                if ((prev.start == conn.start && prev.end == conn.end) ||
-                    (prev.start == conn.end && prev.end == conn.start)) {
-                    ++offsetCount;
-                }
-            }
-
-            double curveHeight = 30.0 + offsetCount * 15.0;
-            int directionFlag = (conn.start->text().toInt() < conn.end->text().toInt()) ? 1 : -1;
-            QPointF offset = normal * curveHeight * directionFlag;
-
-            control = (start + end) / 2 + offset;
+            offset *= 40;
             path.moveTo(start);
-            path.quadTo(control, end);
-            painter.drawPath(path);
-
-            QPointF labelPos = (start + end) / 2 + offset + QPointF(10, -10);
-            painter.drawText(labelPos, label + " = " + QString::number(weight));
+            path.quadTo(mid + offset, end);
+            p.drawPath(path);
+            p.drawText(mid + offset + QPointF(10, -10), label + "=" + QString::number(val));
         }
     }
+}
 
-    painter.setPen(Qt::darkRed);
-    QFont labelFont = painter.font();
-    labelFont.setPointSize(10);
-    labelFont.setBold(true);
-    painter.setFont(labelFont);
-
-    for (auto btn : buttons) {
-        QString node = btn->text();
-        QPoint center = btn->geometry().center();
-        for (const auto& conn : connections) {
-            if (conn.start == conn.end) {
-                if (node == "4" && conn.start->text() == "4") {
-                    painter.drawText(center.x() - 60, center.y() - 50, "G₂ = α₂ - α₃ sin(y₄)");
-                }
-                if (node == "5" && conn.start->text() == "5") {
-                    painter.drawText(center.x() - 60, center.y() - 50, "G₁ = 1 - α₁ tanh(y₅)");
-                }
-            }
-        }
-    }
+QString ButtonNetwork::buildTerm(const QString& from, const QString&, const QString& function, double val) {
+    if (function == "sin_exp") return QString::number(val) + "*sin(" + from + ")";
+    if (function == "tanh") return QString::number(val) + "*tanh(" + from + ")";
+    if (function == "relu") return QString::number(val) + "*relu(" + from + ")";
+    return QString::number(val) + "*" + from;
 }
 
 void ButtonNetwork::computeResults() {
     bool ok;
-    double alpha1 = QInputDialog::getDouble(this, "Alpha1", "Enter α1:", 2.2, -100, 100, 2, &ok);
-    double alpha2 = QInputDialog::getDouble(this, "Alpha2", "Enter α2:", 2.0, -100, 100, 2, &ok);
-    double alpha3 = QInputDialog::getDouble(this, "Alpha3", "Enter α3:", 1.2, -100, 100, 2, &ok);
+    alpha1 = QInputDialog::getDouble(this, "Alpha1", "Enter α1:", 2.2, -100, 100, 2, &ok);
+    if (!ok) return;
+    alpha2 = QInputDialog::getDouble(this, "Alpha2", "Enter α2:", 2.0, -100, 100, 2, &ok);
+    if (!ok) return;
+    alpha3 = QInputDialog::getDouble(this, "Alpha3", "Enter α3:", 1.2, -100, 100, 2, &ok);
+    if (!ok) return;
 
-    QMap<QString, QStringList> functionTerms;
-
-    for (const auto& conn : connections) {
-        QString from = "y" + conn.end->text();  // the influencing/source node
-        QString to = "y" + conn.start->text();  // the node whose equation we're building
-        QString weight = "s" + conn.end->text() + conn.start->text(); // sji
-        //
-
-
-        //
-        double val = weightValues.value(weight, 1.0);
-
-        QString term;
-        if (conn.start->text() == "4" && conn.end->text() == "4") {
-            term = QString("(%1 - %2*sin(y4))").arg(alpha2).arg(alpha3);
-        } else if (conn.start->text() == "5" && conn.end->text() == "5") {
-            term = QString("(1 - %1*tanh(y5))").arg(alpha1);
-        } else {
-            if (conn.function == "sin_exp")
-                term = QString::number(val) + "*sin(" + from + ")";
-            else if (conn.function == "tanh")
-                term = QString::number(val) + "*tanh(" + from + ")";
-            else if (conn.function == "relu")
-                term = QString::number(val) + "*relu(" + from + ")";
-            else
-                term = QString::number(val) + "*" + from;
-        }
-
-        functionTerms[to].append(term);
-    }
-
-    QString filePath = QFileDialog::getSaveFileName(this, "Save Graph Equations", "", "Text Files (*.txt)");
-    if (filePath.isEmpty()) return;
-
-    QFile file(filePath);
-    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QTextStream out(&file);
-
-        out << "=== Differential Equations ===\n";
-        for (int i = 0; i < buttons.size(); ++i) {
-            QString label = "y" + buttons[i]->text();
-            out << "Dy" << buttons[i]->text() << "(w) = -" << label;
-            if (functionTerms.contains(label)) {
-                for (const QString& term : functionTerms[label]) {
-                    out << " + " << term;
-                }
-            }
-            out << "\n";
-        }
-
-        out << "\n=== Weight Values (sij) ===\n";
-        for (auto it = weightValues.begin(); it != weightValues.end(); ++it) {
-            out << it.key() << " = " << it.value() << "\n";
-        }
-
-        out << "\n=== Alpha Constants ===\n";
-        out << "α1 = " << alpha1 << "\n";
-        out << "α2 = " << alpha2 << "\n";
-        out << "α3 = " << alpha3 << "\n";
-
-        file.close();
-        QMessageBox::information(this, "Saved", "Equations saved to:\n" + filePath);
-        emit fileSaved(filePath);
-        if (equationEditor) {
-            QFile reload(filePath);
-            if (reload.open(QIODevice::ReadOnly | QIODevice::Text)) {
-                QTextStream in(&reload);
-                equationEditor->setPlainText(in.readAll());
-            }
-        }
-    }
-}
-
-void ButtonNetwork::clearNetwork() {
-    for (auto btn : buttons) {
-        delete btn;
-    }
-    buttons.clear();
-    connections.clear();
-    weightValues.clear();
-    update();
-    if (equationEditor) equationEditor->clear();
-}
-
-void ButtonNetwork::updateEquationEditor(QTextEdit* editor) {
-    equationEditor = editor;
+    if (solverMode == "ODE") runODE();
+    else runGamma();
 }
 
 double ButtonNetwork::sinEFunction(double x) {
-    std::complex<double> i(0, 1);
-    return (exp(i * x) - exp(-i * x)).real() / (2.0 * i).real();
+    return sin(x);
 }
 
 double ButtonNetwork::tanhFunction(double x) {
-    double exp2x = exp(-2 * x);
-    return (1 - exp2x) / (1 + exp2x);
+    return tanh(x);
 }
 
 double ButtonNetwork::reluFunction(double x) {
-    return (x > 0) ? x : 0.0;
+    return (x > 0) ? x : 0;
+}
+
+double ButtonNetwork::gammaWeight(int om, int r, double nu) {
+    if (om - r == 0) return 1.0;
+    double num = tgamma(om - r + nu);
+    double denom = tgamma(om - r + 1) * tgamma(nu);
+    return num / denom;
+}
+
+void ButtonNetwork::runODE() {
+    const double h = 0.01;
+    const int steps = tMax;
+    QVector<QVector<double>> y(5, QVector<double>(steps + 1));
+    y[0][0] = 0.8;
+    y[1][0] = 0.3;
+    y[2][0] = 0.4;
+    y[3][0] = 0.6;
+    y[4][0] = 0.7;
+
+    for (int t = 1; t <= steps; ++t) {
+        for (int i = 0; i < 5; ++i) {
+            double sum = -y[i][t - 1];
+
+            for (const auto& conn : connections) {
+                int from = conn.start->text().toInt() - 1;
+                int to = conn.end->text().toInt() - 1;
+                if (to != i) continue;
+
+                QString key = "s" + conn.start->text() + conn.end->text();
+                double weight = weightValues.value(key, 0.0);
+                double input = y[from][t - 1];
+
+                if (conn.function == "sin_exp")
+                    sum += weight * sinEFunction(input);
+                else if (conn.function == "tanh")
+                    sum += weight * tanhFunction(input);
+                else if (conn.function == "relu")
+                    sum += weight * reluFunction(input);
+            }
+
+            if (i == 3)
+                sum += (alpha2 - alpha3 * sinEFunction(y[4][t - 1])) * tanhFunction(y[3][t - 1]);
+            if (i == 4)
+                sum += (1 - alpha1 * tanhFunction(y[2][t - 1])) * tanhFunction(y[4][t - 1]);
+
+            y[i][t] = y[i][t - 1] + h * sum;
+        }
+    }
+
+    saveAndDisplayResult(y, steps);
+}
+
+void ButtonNetwork::runGamma() {
+    const int steps = tMax;
+    const double nu = 0.7;
+    QVector<QVector<double>> y(5, QVector<double>(steps + 1));
+    y[0][0] = 0.8;
+    y[1][0] = 0.3;
+    y[2][0] = 0.4;
+    y[3][0] = 0.6;
+    y[4][0] = 0.7;
+
+    for (int om = 1; om <= steps; ++om) {
+        for (int i = 0; i < 5; ++i) {
+            double acc = 0.0;
+
+            for (int r = 1; r <= om; ++r) {
+                double sum = -y[i][r - 1];
+
+                for (const auto& conn : connections) {
+                    int from = conn.start->text().toInt() - 1;
+                    int to = conn.end->text().toInt() - 1;
+                    if (to != i) continue;
+
+                    QString key = "s" + conn.start->text() + conn.end->text();
+                    double weight = weightValues.value(key, 0.0);
+                    double input = y[from][r - 1];
+
+                    if (conn.function == "sin_exp")
+                        sum += weight * sinEFunction(input);
+                    else if (conn.function == "tanh")
+                        sum += weight * tanhFunction(input);
+                    else if (conn.function == "relu")
+                        sum += weight * reluFunction(input);
+                }
+
+                if (i == 3)
+                    sum += (alpha2 - alpha3 * sinEFunction(y[4][r - 1])) * tanhFunction(y[3][r - 1]);
+                if (i == 4)
+                    sum += (1 - alpha1 * tanhFunction(y[2][r - 1])) * tanhFunction(y[4][r - 1]);
+
+                acc += sum * gammaWeight(om, r, nu);
+            }
+
+            y[i][om] = y[i][0] + acc;
+        }
+    }
+
+    saveAndDisplayResult(y, steps);
+}
+
+void ButtonNetwork::saveAndDisplayResult(const QVector<QVector<double>>& y, int steps) {
+    QFile file("result.dat");
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QMessageBox::critical(this, "Error", "Could not write result.dat");
+        return;
+    }
+
+    QTextStream out(&file);
+    for (int t = 0; t <= steps; ++t) {
+        for (int i = 0; i < 5; ++i) {
+            out << QString::number(y[i][t], 'f', 6) << (i < 4 ? " " : "\n");
+        }
+    }
+    file.close();
+
+    if (equationEditor) {
+        QFile f("result.dat");
+        if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            QTextStream in(&f);
+            QString content = "=== Computation Result ===\n";
+            content += in.readAll();
+            equationEditor->setPlainText(content);
+            f.close();
+        }
+    }
 }
