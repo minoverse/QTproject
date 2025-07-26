@@ -1,4 +1,3 @@
-// === UPDATED buttonnetwork.h ===
 #ifndef BUTTONNETWORK_H
 #define BUTTONNETWORK_H
 
@@ -9,9 +8,9 @@
 #include <QMouseEvent>
 #include <QVector>
 #include <QMap>
-#include <QSet>
-#include <QPair>
 #include <QTextEdit>
+#include <QString>
+#include <cmath>
 #include <complex>
 
 struct Connection {
@@ -29,15 +28,19 @@ public:
     void paintEvent(QPaintEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void updateEquationEditor(QTextEdit* editor);
-    QString buildTerm(const QString& from, const QString& weight, const QString& function, double val);//added
-
-
-signals:
-    void fileSaved(const QString& filePath);
+    QString buildTerm(const QString& from, const QString& weight, const QString& function, double val);
 
 public slots:
     void computeResults();
     void clearNetwork();
+    void setSolverMode(const QString& mode);
+    void setTimeLimit(int t);
+    void showGraph();
+    void showTable();
+    void showOutputTable();
+
+signals:
+    void fileSaved(const QString& filePath);
 
 private slots:
     void buttonClicked();
@@ -46,15 +49,22 @@ private slots:
 private:
     QVector<QPushButton*> buttons;
     QVector<Connection> connections;
-    QMap<QPushButton*, double> values;
     QMap<QString, double> weightValues;
     QPushButton* firstSelected = nullptr;
     int maxNodes = 5;
-    QTextEdit* equationEditor = nullptr;  // Link to external text editor for live updates
+    QString solverMode = "ODE";
+    int tMax = 5000;
+    QTextEdit* equationEditor = nullptr;
+
+    double alpha1 = 2.2, alpha2 = 2.0, alpha3 = 1.2;
+    void generateGnuplotScript();
+    void runODE();
+    void runGamma();
 
     double sinEFunction(double x);
     double tanhFunction(double x);
     double reluFunction(double x);
+    double gammaWeight(int om, int r, double nu);
 };
 
 #endif // BUTTONNETWORK_H
