@@ -57,6 +57,7 @@ Users can visually design a 5-node network, assign custom activation functions (
 7. Graphs plotted using Gnuplot
 
 ## Image
-![image]https://github.com/minoverse/QTproject/issues/1#issue-3606426229
+![QT Network](QT_network.jpg)
+
 
 
