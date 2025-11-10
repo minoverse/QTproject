@@ -57,7 +57,7 @@ Users can visually design a 5-node network, assign custom activation functions (
 7. Graphs plotted using Gnuplot
 
 ## Image
-![QT Network](QT_network.jpg)
+![Network Screenshot](QT_network.jpg)
 
 
 
