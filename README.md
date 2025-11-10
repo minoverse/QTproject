@@ -40,5 +40,23 @@ Users can visually design a 5-node network, assign custom activation functions (
 7. Graphs plotted using Gnuplot
 
 ## Image
+1. User creates nodes (1–5) on canvas
+2. User connects them and selects function: sin / tanh / relu
+3. Each connection stores:
+   - start & end node
+   - weight value (user input)
+   - activation function
+4. User selects:
+   - Solver type: "ODE" or "Gamma"
+   - Time steps (t_max)
+   - Alpha constants (α₁, α₂, α₃)
+5. Qt internally runs simulation:
+   - If ODE: uses Euler method
+   - If Gamma: uses Caputo approximation
+6. Result shown on right in readable text
+7. Graphs plotted using Gnuplot
+
+## Image
 ![image]https://github.com/minoverse/QTproject/issues/1#issue-3606426229
+
 
