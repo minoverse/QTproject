@@ -22,7 +22,7 @@ Users can visually design a 5-node network, assign activation functions (sin, ta
 
 ---
 
-## ⚙️ How It Works
+##  How It Works
 
 ```txt
 1. User creates nodes (1–5) on canvas
@@ -32,7 +32,7 @@ Users can visually design a 5-node network, assign activation functions (sin, ta
 3. Select:
      - Solver: ODE or Gamma
      - Time steps (t_max)
-# 📌 Known Issues & Performance Notes
+#  Known Issues & Performance Notes
 
 ## 1. Overview
 
@@ -50,14 +50,14 @@ especially for large simulation time horizons.
 
 ## 2. Issue: Simulation Appears to Stop Around `t ≈ 500`
 
-### 🔍 Observed Behavior
+###  Observed Behavior
 
 - When running the **fractional (Gamma) solver**, the simulation appears to freeze
   or stop progressing around **t ≈ 500**.
 - The application does **not crash**, but the UI becomes unresponsive.
 - Result files and plots are generated only after the full computation finishes.
 
-### ✅ Root Cause
+###  Root Cause
 
 This behavior is caused by **computational bottlenecks**, not by incorrect equations.
 
@@ -130,7 +130,7 @@ inf or NaN values
 
 corrupted simulation results
 
-🧠 Cause
+ Cause
 The gamma kernel weight is defined as:
 
 𝑤
@@ -172,7 +172,7 @@ Fractional order ν is currently hard-coded
 Parameter ranges are not fully constrained
 
 5. Planned / Recommended Improvements
-🚀 Performance Improvements
+ Performance Improvements
 Precompute gamma weights once instead of recalculating
 
 Replace std::tgamma() with std::lgamma() for numerical stability
@@ -181,7 +181,7 @@ Reduce frequency of QCoreApplication::processEvents()
 
 Move heavy computation to a background worker thread
 
-🧮 Numerical Stability
+ Numerical Stability
 Restrict fractional order to 0 < ν < 1
 
 Validate user input parameters
