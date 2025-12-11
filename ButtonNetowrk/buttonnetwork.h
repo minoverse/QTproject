@@ -27,8 +27,12 @@ public:
     explicit ButtonNetwork(QWidget *parent = nullptr);
     void paintEvent(QPaintEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
+
     void updateEquationEditor(QTextEdit* editor);
-    QString buildTerm(const QString& from, const QString& weight, const QString& function, double val);
+    QString buildTerm(const QString& from,
+                      const QString& weight,
+                      const QString& function,
+                      double val);
 
 public slots:
     void computeResults();
@@ -65,6 +69,7 @@ private:
     double tanhFunction(double x);
     double reluFunction(double x);
     double gammaWeight(int om, int r, double nu);
+    void saveAndDisplayResult(const QVector<QVector<double>>& y, int steps);
 };
 
 #endif // BUTTONNETWORK_H
