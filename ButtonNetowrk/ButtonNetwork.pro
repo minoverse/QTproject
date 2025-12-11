@@ -1,5 +1,9 @@
-QT += widgets
-CONFIG += c++17
+QT += core gui widgets
+
+CONFIG += c++11
+
+TEMPLATE = app
+TARGET = ButtonNetwork
 
 SOURCES += \
     main.cpp \
