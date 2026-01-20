@@ -7,6 +7,17 @@ This project is a **Qt-based GUI tool** for building and simulating **Hopfield n
 - Fractional-order (Gamma-based) solver
 
 Users can visually design a 5-node network, assign activation functions (sin, tanh, ReLU), set custom weights, and run the simulation with real-time output.
+## 📸 Demo / Screenshots
+
+### Network Design & Simulation GUI
+<p align="center">
+  <img src="docs/demo_gui.png" width="700"/>
+</p>
+
+### Simulation Output & Plot
+<p align="center">
+  <img src="docs/demo_plot.png" width="700"/>
+</p>
 
 ---
 
