@@ -11,7 +11,7 @@ Users can visually design a 5-node network, assign activation functions (sin, ta
 
 ### Network Design & Simulation GUI
 <p align="center">
-  <img src="docs/demo_gui.png" width="700"/>
+  <img src="docs/Screenshot_20260120_100149_Gallery.jpg" width="700"/>
 </p>
 
 ### Simulation Output & Plot
