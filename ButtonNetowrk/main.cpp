@@ -1,142 +1,124 @@
-#include <QApplication>
-#include <QSplitter>
-#include <QTextEdit>
-#include <QPushButton>
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QComboBox>
-#include <QSpinBox>
-#include <QDoubleSpinBox>
-#include <QLabel>
-#include <QFile>
-#include <QTextStream>
 #include "buttonnetwork.h"
 
-int main(int argc, char *argv[]) {
-    QApplication app(argc, argv);
-    qputenv("QT_ACCESSIBILITY", "0");
+#include <QApplication>
+#include <QWidget>
+#include <QHBoxLayout>
+#include <QVBoxLayout>
+#include <QPushButton>
+#include <QTextEdit>
+#include <QGroupBox>
+#include <QLabel>
+#include <QSpinBox>
+#include <QComboBox>
+#include <QDoubleSpinBox>
 
-    QWidget* mainWindow = new QWidget;
-    mainWindow->setWindowTitle("Hopfield Fractional Network");
-    mainWindow->resize(1500, 800);
+int main(int argc, char *argv[])
+{
+    QApplication a(argc, argv);
 
-    QSplitter* splitter = new QSplitter(Qt::Horizontal, mainWindow);
-    ButtonNetwork* builder = new ButtonNetwork;
+    QWidget window;
+    window.setWindowTitle("Hopfield Button Network (Debian/Qt)");
+    window.resize(1200, 700);
 
-    QTextEdit* outputView = new QTextEdit;
-    outputView->setReadOnly(true);
-    outputView->setMinimumWidth(700);
-    builder->updateEquationEditor(outputView);
+    auto *root = new QHBoxLayout(&window);
 
-    splitter->addWidget(builder);
-    splitter->addWidget(outputView);
+    // Left: network canvas
+    auto *net = new ButtonNetwork();
+    net->setMinimumSize(700, 650);
 
-    QList<int> sizes;
-    sizes << 600 << 900;
-    splitter->setSizes(sizes);
+    // Right: controls + log/table viewer
+    auto *right = new QVBoxLayout();
+    auto *log = new QTextEdit();
+    log->setReadOnly(true);
+    log->setPlaceholderText("Logs / output table / gnuplot errors...");
 
-    QPushButton* clearBtn    = new QPushButton("Clear");
-    QPushButton* computeBtn  = new QPushButton("Compute");
-    QPushButton* graphBtn    = new QPushButton("Show Graph");
-    QPushButton* tableBtn    = new QPushButton("Show Output Table");
-    QPushButton* scanBtn     = new QPushButton("Scan Alpha2 (3D/2D)");
+    net->updateEquationEditor(log);
 
-    // ✅ NEW: Auto Test button (Node5 preset)
-    QPushButton* autoTestBtn = new QPushButton("Auto Test (Node5 preset)");
+    // Controls box
+    auto *box = new QGroupBox("Controls");
+    auto *boxL = new QVBoxLayout(box);
 
-    QComboBox* solverMode = new QComboBox;
-    solverMode->addItem("ODE");
-    solverMode->addItem("Fractional (Gamma)");
+    auto *solverCombo = new QComboBox();
+    solverCombo->addItem("ODE");
+    solverCombo->addItem("GAMMA");
 
-    QSpinBox* tmaxInput = new QSpinBox;
-    tmaxInput->setRange(100, 100000);
-    tmaxInput->setValue(5000);
-    tmaxInput->setSingleStep(500);
+    auto *stepsSpin = new QSpinBox();
+    stepsSpin->setRange(10, 50000);
+    stepsSpin->setValue(800);
 
-    QHBoxLayout* topOptions = new QHBoxLayout;
-    topOptions->addWidget(new QLabel("Solver:"));
-    topOptions->addWidget(solverMode);
-    topOptions->addWidget(new QLabel("t_max:"));
-    topOptions->addWidget(tmaxInput);
+    auto *a2Min = new QDoubleSpinBox(); a2Min->setRange(-1000, 1000); a2Min->setValue(-10.0);
+    auto *a2Max = new QDoubleSpinBox(); a2Max->setRange(-1000, 1000); a2Max->setValue( 10.0);
+    auto *a2Step= new QDoubleSpinBox(); a2Step->setRange(0.0001, 1000); a2Step->setDecimals(4); a2Step->setValue(0.5);
 
-    // ------------------------------------------------------------
-    // alpha2 scan inputs (UI)
-    // ------------------------------------------------------------
-    QDoubleSpinBox* a2Min = new QDoubleSpinBox;
-    QDoubleSpinBox* a2Max = new QDoubleSpinBox;
-    QDoubleSpinBox* a2Step = new QDoubleSpinBox;
-    a2Min->setRange(-1000, 1000); a2Min->setDecimals(4); a2Min->setValue(-10.0);
-    a2Max->setRange(-1000, 1000); a2Max->setDecimals(4); a2Max->setValue(10.0);
-    a2Step->setRange(0.0001, 1000); a2Step->setDecimals(4); a2Step->setValue(0.5);
+    auto *transientSpin = new QSpinBox(); transientSpin->setRange(0, 99); transientSpin->setValue(70);
+    auto *strideSpin    = new QSpinBox(); strideSpin->setRange(1, 10000); strideSpin->setValue(20);
 
-    QSpinBox* transientPct = new QSpinBox;
-    transientPct->setRange(0, 99); transientPct->setValue(70);
-    QSpinBox* sampleStride = new QSpinBox;
-    sampleStride->setRange(1, 1000000); sampleStride->setValue(20);
+    auto *btnCompute = new QPushButton("Compute");
+    auto *btnGraph   = new QPushButton("Graph (y_all.png)");
+    auto *btnTable   = new QPushButton("Show Table");
+    auto *btnScanA2  = new QPushButton("Alpha2 Scan (PNG)");
+    auto *btnAuto    = new QPushButton("AUTO Test Preset");
+    auto *btnClear   = new QPushButton("Clear Network");
 
-    QHBoxLayout* scanOptions = new QHBoxLayout;
-    scanOptions->addWidget(new QLabel("alpha2 min:"));
-    scanOptions->addWidget(a2Min);
-    scanOptions->addWidget(new QLabel("max:"));
-    scanOptions->addWidget(a2Max);
-    scanOptions->addWidget(new QLabel("step:"));
-    scanOptions->addWidget(a2Step);
-    scanOptions->addWidget(new QLabel("transient %:"));
-    scanOptions->addWidget(transientPct);
-    scanOptions->addWidget(new QLabel("stride:"));
-    scanOptions->addWidget(sampleStride);
+    boxL->addWidget(new QLabel("Solver"));
+    boxL->addWidget(solverCombo);
 
-    QHBoxLayout* buttonLayout = new QHBoxLayout;
-    buttonLayout->addWidget(clearBtn);
-    buttonLayout->addWidget(computeBtn);
-    buttonLayout->addWidget(graphBtn);
-    buttonLayout->addWidget(tableBtn);
-    buttonLayout->addWidget(scanBtn);
+    boxL->addWidget(new QLabel("tMax (steps)"));
+    boxL->addWidget(stepsSpin);
 
-    // ✅ NEW: add Auto Test button (does not affect existing buttons)
-    buttonLayout->addWidget(autoTestBtn);
+    boxL->addWidget(new QLabel("alpha2 scan min / max / step"));
+    boxL->addWidget(a2Min);
+    boxL->addWidget(a2Max);
+    boxL->addWidget(a2Step);
 
-    QVBoxLayout* layout = new QVBoxLayout(mainWindow);
-    layout->addLayout(topOptions);
-    layout->addLayout(scanOptions);
-    layout->addWidget(splitter);
-    layout->addLayout(buttonLayout);
+    boxL->addWidget(new QLabel("scan transient% / stride"));
+    boxL->addWidget(transientSpin);
+    boxL->addWidget(strideSpin);
 
-    QObject::connect(clearBtn,  &QPushButton::clicked, builder, &ButtonNetwork::clearNetwork);
-    QObject::connect(computeBtn,&QPushButton::clicked, builder, &ButtonNetwork::computeResults);
-    QObject::connect(graphBtn,  &QPushButton::clicked, builder, &ButtonNetwork::showGraph);
-    QObject::connect(tableBtn,  &QPushButton::clicked, builder, &ButtonNetwork::showTable);
-    QObject::connect(scanBtn,   &QPushButton::clicked, builder, &ButtonNetwork::scanAlpha2);
+    boxL->addSpacing(8);
+    boxL->addWidget(btnCompute);
+    boxL->addWidget(btnGraph);
+    boxL->addWidget(btnTable);
+    boxL->addWidget(btnScanA2);
+    boxL->addWidget(btnAuto);
+    boxL->addWidget(btnClear);
 
-    // ✅ NEW: Auto Test (Node5 preset) 1-time run
-    QObject::connect(autoTestBtn, &QPushButton::clicked, builder, &ButtonNetwork::runAutoTestNode5Preset);
+    right->addWidget(box);
+    right->addWidget(log, 1);
 
-    QObject::connect(solverMode,&QComboBox::currentTextChanged, builder, &ButtonNetwork::setSolverMode);
-    QObject::connect(tmaxInput, qOverload<int>(&QSpinBox::valueChanged),
-                     builder, &ButtonNetwork::setTimeLimit);
+    root->addWidget(net, 1);
+    root->addLayout(right, 0);
 
-    // alpha2 scan UI -> builder
-    auto pushScanParams = [=]() {
-        builder->setAlpha2ScanRange(a2Min->value(), a2Max->value(), a2Step->value());
-        builder->setAlpha2ScanSampling(transientPct->value(), sampleStride->value());
+    // Wiring
+    QObject::connect(solverCombo, &QComboBox::currentTextChanged,
+                     net, &ButtonNetwork::setSolverMode);
+    QObject::connect(stepsSpin, QOverload<int>::of(&QSpinBox::valueChanged),
+                     net, &ButtonNetwork::setTimeLimit);
+
+    auto applyScanSettings = [&]() {
+        net->setAlpha2ScanRange(a2Min->value(), a2Max->value(), a2Step->value());
+        net->setAlpha2ScanSampling(transientSpin->value(), strideSpin->value());
     };
-    QObject::connect(a2Min, qOverload<double>(&QDoubleSpinBox::valueChanged), pushScanParams);
-    QObject::connect(a2Max, qOverload<double>(&QDoubleSpinBox::valueChanged), pushScanParams);
-    QObject::connect(a2Step, qOverload<double>(&QDoubleSpinBox::valueChanged), pushScanParams);
-    QObject::connect(transientPct, qOverload<int>(&QSpinBox::valueChanged), pushScanParams);
-    QObject::connect(sampleStride, qOverload<int>(&QSpinBox::valueChanged), pushScanParams);
-    pushScanParams();
 
-    QObject::connect(builder, &ButtonNetwork::fileSaved,
-                     [=](const QString& path) {
-                         QFile file(path);
-                         if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-                             QTextStream in(&file);
-                             outputView->setPlainText(in.readAll());
-                         }
-                     });
+    QObject::connect(a2Min,  QOverload<double>::of(&QDoubleSpinBox::valueChanged), [&](){ applyScanSettings(); });
+    QObject::connect(a2Max,  QOverload<double>::of(&QDoubleSpinBox::valueChanged), [&](){ applyScanSettings(); });
+    QObject::connect(a2Step, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [&](){ applyScanSettings(); });
+    QObject::connect(transientSpin, QOverload<int>::of(&QSpinBox::valueChanged), [&](){ applyScanSettings(); });
+    QObject::connect(strideSpin,    QOverload<int>::of(&QSpinBox::valueChanged), [&](){ applyScanSettings(); });
 
-    mainWindow->setLayout(layout);
-    mainWindow->show();
-    return app.exec();
+    applyScanSettings();
+
+    QObject::connect(btnCompute, &QPushButton::clicked, net, &ButtonNetwork::computeResults);
+    QObject::connect(btnGraph,   &QPushButton::clicked, net, &ButtonNetwork::showGraph);
+    QObject::connect(btnTable,   &QPushButton::clicked, net, &ButtonNetwork::showTable);
+    QObject::connect(btnScanA2,  &QPushButton::clicked, net, &ButtonNetwork::scanAlpha2);
+    QObject::connect(btnAuto,    &QPushButton::clicked, net, &ButtonNetwork::runAutoTestNode5Preset);
+    QObject::connect(btnClear,   &QPushButton::clicked, net, &ButtonNetwork::clearNetwork);
+
+    QObject::connect(net, &ButtonNetwork::fileSaved, [&](const QString& p){
+        log->append("[saved] " + p);
+    });
+
+    window.show();
+    return a.exec();
 }
