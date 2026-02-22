@@ -18,7 +18,7 @@
 #include <QDir>
 #include <QDateTime>
 #include <QFileInfo>
-#include <QCheckBox> // 
+#include <QCheckBox> // 옵션 ON/OFF 체크
 #include <QComboBox> //함수 선택
 
 #include <cmath>
