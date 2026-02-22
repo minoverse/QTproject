@@ -23,9 +23,9 @@
 
 #include <cmath>
 
-ButtonNetwork::ButtonNetwork(QWidget *parent) : QWidget(parent)
+ButtonNetwork::ButtonNetwork(QWidget *parent) : QWidget(parent) //passing parent ensures proper Qt ownership and event propagation.
 {
-    setMouseTracking(true);
+    setMouseTracking(true); //마우스를 누르지 않아도 mouse move 이벤트를 받을 수 있게
 
     bool ok;
     int userInput = QInputDialog::getInt(
@@ -65,7 +65,8 @@ void ButtonNetwork::mousePressEvent(QMouseEvent *event)
     // 2) create node
     if (buttons.size() >= maxNodes) return;
 
-    QPushButton* btn = new QPushButton(QString::number(buttons.size() + 1), this);
+    QPushButton* btn = new QPushButton(QString::number(buttons.size() + 1), this); //버튼에 노드 번호 label 붙이는 역할,
+    //부모가 삭제되면 자식 위젯도 자동으로 삭제됨 (Qt parent-child ownership)
     btn->setGeometry(event->pos().x(), event->pos().y(), 40, 40);
     btn->setStyleSheet("border-radius: 20px; background-color: lightgray;");
     btn->show();
@@ -73,9 +74,10 @@ void ButtonNetwork::mousePressEvent(QMouseEvent *event)
     buttons.append(btn);
 }
 
-void ButtonNetwork::buttonClicked()
+void ButtonNetwork::buttonClicked() // 노드 버튼을 두 번 선택해서 연결(Edge)을 만들기 위한 로직
 {
-    QPushButton* clickedButton = qobject_cast<QPushButton*>(sender());
+    QPushButton* clickedButton = qobject_cast<QPushButton*>(sender()); //sender :signal을 보낸 객체를 얻음,qobject_cast : Qt-safe cast, 실패 시 nullptr
+    //캐스팅은 데이터 타입을 강제로 변환
     if (!clickedButton) return;
 
     if (!firstSelected) {
@@ -106,7 +108,7 @@ void ButtonNetwork::showFunctionDialog(QPushButton* start, QPushButton* end)
     layout.addWidget(&reluButton);
     layout.addWidget(&confirmButton);
 
-    connect(&confirmButton, &QPushButton::clicked, [&]() {
+    connect(&confirmButton, &QPushButton::clicked, [&]() { //필요한 외부 변수를 참조로 가져다 쓰겠다”
         QColor color;
         QString functionType;
 
@@ -230,7 +232,8 @@ double ButtonNetwork::applyFn(const QString& fn, double x) const
     if (fn == "relu") return (x > 0.0) ? x : 0.0;
     return std::sin(x);
 }
-
+//nodeIndex가 node4 또는 node5일 때, 그 노드의 Gate(G2 또는 G1)를 yValue(현재 상태 값)에기반해서계산해 반환.
+//다른 노드면 0.0을 반환
 double ButtonNetwork::evalGateForNode(int nodeIndex, double yValue) const
 {
     const GateConfig* gate = nullptr;
@@ -277,7 +280,7 @@ bool ButtonNetwork::ensureBaseResultDir()
         }
     }
     return true;
-}
+}  //warning:문제는있지만 계속진행 critical: 문제가 심각 작업실패, 중단”
 
 bool ButtonNetwork::createNewRunDir()
 {
@@ -308,7 +311,7 @@ void ButtonNetwork::writeRunInfoFile() const
     QFile f(runPath("run_info.txt"));
     if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) return;
 
-    QTextStream out(&f);
+    QTextStream out(&f); //f는 QFile 객체,TextStream writes formatted text to a QIODevice
     out << "=== Hopfield Fractional Network Run Info ===\n";
     out << "RunDir: " << currentRunDir << "\n";
     out << "Solver: " << solverMode << "\n";
