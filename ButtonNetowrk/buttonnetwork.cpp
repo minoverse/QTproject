@@ -1204,7 +1204,7 @@ void ButtonNetwork::runAutoTestNode5Preset()
 
     showGraph();
     scanAlpha2ReuseCurrentRun();
-
+    //경로 생성 함수
     auto rp = [&](const QString& name){ return runDirFixed + "/" + name; };
 
     copyOverwrite(rp("result.dat"),        rp("test_result.dat"));
