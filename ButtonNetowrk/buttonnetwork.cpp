@@ -405,7 +405,7 @@ void ButtonNetwork::runODE()
         for (int i = 0; i < 5; ++i) {
             double sum = -y[i][t - 1];
 
-            for (const auto& conn : connections) {
+            for (const auto& conn : connections) { //버튼에 적힌 노드 번호가 1부터 시작인데, 배열/벡터 인덱스는 0부터 시작
                 int from = conn.start->text().toInt() - 1;
                 int to   = conn.end->text().toInt() - 1;
                 if (to != i) continue;
@@ -689,7 +689,7 @@ void ButtonNetwork::showGraph()
     QProcess proc;
     proc.setWorkingDirectory(currentRunDir);
     proc.start("gnuplot", QStringList() << "plot.gnu");
-
+    //Qt에서 외부 프로그램(gnuplot)을 실행해서 PNG 그래프를 만든 다음, 성공하면 신호(signal)를 보내고, Linux에서는 파일을 열어주는 흐름
     if (!proc.waitForStarted()) {
         QMessageBox::critical(this, "Error", "Failed to start gnuplot. Is it installed?");
         return;
@@ -717,7 +717,7 @@ void ButtonNetwork::scanAlpha2()
     writeRunInfoFile();
     scanAlpha2ReuseCurrentRun();
 }
-
+//currentRunDir를 그대로 사용해 alpha2 값을 여러 개로 바꿔가며 시뮬레이션을 반복 실행,  결과파일로 저장(gnuplot으로 PNG도 만들려고 시도)하는alpha2 파라미터 스윕/스캔 함수
 void ButtonNetwork::scanAlpha2ReuseCurrentRun()
 {
     if (currentRunDir.isEmpty()) {
@@ -733,7 +733,7 @@ void ButtonNetwork::scanAlpha2ReuseCurrentRun()
 
     if (!(a2Step > 0.0) || a2Max < a2Min) {
         bool ok = true;
-        a2Min = QInputDialog::getDouble(this, "Alpha2 scan", "alpha2 min:", -10.0, -1000, 1000, 4, &ok);
+        a2Min = QInputDialog::getDouble(this, "Alpha2 scan", "alpha2 min:", -10.0, -1000, 1000, 4, &ok); //text is default value
         if (!ok) return;
         a2Max = QInputDialog::getDouble(this, "Alpha2 scan", "alpha2 max:",  10.0, -1000, 1000, 4, &ok);
         if (!ok) return;
@@ -886,7 +886,7 @@ void ButtonNetwork::scanAlpha2ReuseCurrentRun()
         QMessageBox::warning(this, "Gnuplot", "Failed to start gnuplot. Is it installed?");
         return;
     }
-
+//nuplot 실행 결과가 실패인지 성공인지 판단해서, 실패면 경고 띄우고 종료 / 성공이면 파일 저장 완료 signal을 emit
     const bool finished = proc.waitForFinished(-1);
     const QString gpStdout = QString::fromLocal8Bit(proc.readAllStandardOutput());
     const QString gpStderr = QString::fromLocal8Bit(proc.readAllStandardError());
@@ -944,7 +944,7 @@ void ButtonNetwork::generateAlpha2ScanGnuplotScripts() const
 }
 
 // ================= Click-edit connections =================
-
+//선(연결선)을 클릭했는지 판단하는 hit-testing 용도
 double ButtonNetwork::distancePointToSegment(const QPointF& p,
                                              const QPointF& a,
                                              const QPointF& b) const
@@ -1120,7 +1120,7 @@ void ButtonNetwork::editConnectionAt(int index)
 }
 
 // ================= Auto preset =================
-
+//같은 이름이 이미 있으면 새로 만들 때 덮어써야 하니까
 bool ButtonNetwork::copyOverwrite(const QString& src, const QString& dst) const
 {
     if (!QFileInfo::exists(src)) return false;
