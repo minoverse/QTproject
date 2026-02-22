@@ -14,12 +14,12 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QDoubleSpinBox>
-#include <QCoreApplication>
+#include <QCoreApplication> //long loop 동안 UI 멈추는 것 방지
 #include <QDir>
 #include <QDateTime>
 #include <QFileInfo>
-#include <QCheckBox>
-#include <QComboBox>
+#include <QCheckBox> // 
+#include <QComboBox> //함수 선택
 
 #include <cmath>
 
