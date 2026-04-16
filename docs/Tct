@@ -1,0 +1,16 @@
+Technical experience:
+1. I built two nRF52840 projects using Zephyr RTOS v4.0, C, and Python, with tools including CMSIS-DSP Q15, nrfx direct register access, Edge Impulse SDK, Nordic PPK2, and J-Link with GDB and RTT: Guardian Audio   Gate (4-ch IIR resonator bank + Edge Impulse int8 TinyML, 92% power reduction, PPK2-verified) and a BLE hearable with MCUboot OTA automatic rollback and 87% power reduction. 
+
+The biggest blocker was a silent  PDM microphone where CONFIG_NRFX_PDM=y compiles nrfx but skips IRQ vector table registration, so nrfx_pdm_init() returned success and hardware registers looked correct in the debugger but the DMA callback never fired. 
+
+I confirmed the root cause via GDB inspection of NVIC->ISER and fixed it with IRQ_CONNECT(PDM_IRQn). The most time-consuming challenge was DMA silent stalls where the hardware freezes with no error and no crash, only absent callbacks, requiring a timeout streak counter (pdm_timeout_streak >= 3) to infer stalls from silence and trigger controlled restarts. 
+
+The most meaningful insight was that DMA restart alone does not restore audio integrity, so I implemented preroll_discontinuous to suppress TinyML inference until 50 clean frames confirm pipeline stability, backed by a 2-layer watchdog (SW 75ms        restart capped at 5 attempts plus HW WDT 500ms SoC reset).          
+
+2. I built a BLE hearable system on nRF52840 with Zephyr RTOS motivated by building an always-on audio product, implementing a custom GATT service with real-time gesture notifications, adaptive connection          interval tuning (10ms to 100ms based on TX rate), and MCUboot OTA with RSA-2048 signing and verified automatic rollback. 
+
+The most meaningful problem was OTA silently stalling at 0 bytes despite a valid connection: I traced the root cause to UART sensor logging corrupting SMP packet framing at the byte level, which taught me that shared transport between application logging and protocol stacks produces silent   framing failures that look like stack bugs. 
+
+That power and BLE work directly motivated Guardian Audio Gate, where I focused on always-on audio intelligence with a two-stage pipeline achieving 92% power reduction, and I observed BLE radio interference raising gate frame miss rate to 18.3% until removing a log mutex from the real-time path dropped it to 1.0%.      
+
+3.My network protocol experience is in BLE: in the hearable project I implemented a custom GATT service (128-bit UUID, CCC descriptor for real-time gesture notifications) and SMP protocol over BLE transport for   mcumgr OTA firmware updates with RSA-2048 image signing, using the Zephyr BLE stack and ZCBOR encoding.  
