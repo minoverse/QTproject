@@ -1,0 +1,329 @@
+Ring Buffer + ISR Flag — Mixed Task
+Language: C only  ·  Embedded context  ·  ISR writes to ring buffer  ·  Tests in plain C with assert()
+
+
+Why mixed: In real embedded/L1 systems an ISR receives bytes from hardware (UART, radio RX) and writes them into a ring buffer. The main loop reads from it. This is the most common real-world ring buffer use case.
+
+
+Scenario
+A UART receiver fires an ISR every time a byte arrives. The ISR writes the byte into a shared ring buffer. The main loop reads bytes from the buffer and processes them. Your job is to review, test, and implement this system correctly.
+
+Phase 1 — Code Review  (~45 min)
+The interviewer gives you this code. Read carefully. Find every bug. Think out loud as you go.
+
+Code to review
+/* ring_buffer.h */
+#define BUFFER_SIZE 8
+
+typedef struct {
+    uint8_t data[BUFFER_SIZE];
+    int     head;
+    int     tail;
+    int     count;
+} RingBuf;
+
+/* ring_buffer.c */
+#include "ring_buffer.h"
+
+RingBuf uart_buf;              /* shared between ISR and main */
+int     rx_flag = 0;           /* set by ISR when data arrives */
+
+void UART_RX_ISR(void) {
+    uint8_t byte = UART_DATA_REG;
+    uart_buf.data[uart_buf.head] = byte;   /* <-- look here */
+    uart_buf.head = uart_buf.head + 1;     /* <-- look here */
+    uart_buf.count++;
+    rx_flag = 1;                           /* <-- look here */
+}
+
+int rb_read(RingBuf* rb, uint8_t* out) {
+    *out = rb->data[rb->tail];             /* <-- look here */
+    rb->tail = rb->tail + 1;               /* <-- look here */
+    rb->count--;
+    return 0;
+}
+
+void main_loop(void) {
+    while (1) {
+        if (rx_flag) {                     /* <-- look here */
+            uint8_t byte;
+            rb_read(&uart_buf, &byte);
+            rx_flag = 0;
+            process_byte(byte);
+        }
+    }
+}
+
+
+Stop here. Write your findings before reading the answers. There are 6 bugs and 3 quality issues.
+
+
+Answers — Bugs and Quality Issues
+#
+Type
+Issue
+1
+BUG
+rx_flag is not volatile — compiler may cache it in a register. main_loop may never see the ISR update. Fix: volatile int rx_flag = 0;
+2
+BUG
+uart_buf is not volatile — compiler may reorder or cache reads/writes to the struct members accessed from ISR. Fix: volatile RingBuf uart_buf;
+3
+BUG
+ISR writes to uart_buf.head without checking if buffer is full — when count==BUFFER_SIZE it overwrites existing data silently.
+4
+BUG
+uart_buf.head is never wrapped with % BUFFER_SIZE — after 8 bytes head goes out of bounds, corrupting memory.
+5
+BUG
+rb_read() does not check if buffer is empty before reading — when count==0 it reads garbage and decrements count below zero.
+6
+BUG
+rb->tail is never wrapped with % BUFFER_SIZE — same out-of-bounds problem on reads.
+7
+QUALITY
+No header guard in ring_buffer.h — double inclusion causes compile errors.
+8
+QUALITY
+rx_flag check and clear in main_loop is not atomic — ISR could fire between if(rx_flag) and rx_flag=0, losing a received byte notification.
+9
+QUALITY
+int used for head/tail/count — should be uint16_t. Signed index with unsigned array is a potential source of subtle bugs.
+
+
+What to say out loud during review
+Spot volatile first — "I see uart_buf and rx_flag are shared with an ISR. First question: are they volatile?"
+Check every index update — "head and tail are incremented but never wrapped — this is an out-of-bounds write."
+Check every read path — "rb_read dereferences out and reads data before checking if empty — that's two bugs."
+Check ISR for full condition — "ISR never checks count before writing — silent data loss when full."
+
+Phase 2 — Test Cases in C  (~30 min)
+Write test cases that catch the bugs you found. One test per scenario. Setup → act → assert.
+
+The ISR cannot be called directly in a test. Use a helper function simulate_isr() that does the same write path.
+
+
+#include <assert.h>
+#include <stdint.h>
+#include <stdio.h>
+#include "ring_buffer.h"
+
+/* Test 1 — basic write and read, FIFO order */
+void test_fifo_order(void) {
+    RingBuf rb;
+    uint8_t out = 0;
+    rb_init(&rb);
+
+    rb_write(&rb, 0xAA);
+    rb_write(&rb, 0xBB);
+    rb_write(&rb, 0xCC);
+
+    rb_read(&rb, &out); assert(out == 0xAA);
+    rb_read(&rb, &out); assert(out == 0xBB);
+    rb_read(&rb, &out); assert(out == 0xCC);
+    printf("PASS test_fifo_order\n");
+}
+
+/* Test 2 — read from empty must return error */
+void test_read_empty(void) {
+    RingBuf rb;
+    uint8_t out = 0;
+    rb_init(&rb);
+
+    assert(rb_read(&rb, &out) != 0);
+    printf("PASS test_read_empty\n");
+}
+
+/* Test 3 — write to full must return error (ISR path) */
+void test_write_full(void) {
+    RingBuf rb;
+    rb_init(&rb);
+
+    for (int i = 0; i < BUFFER_SIZE; i++) {
+        assert(rb_write(&rb, (uint8_t)i) == 0);
+    }
+    assert(rb_write(&rb, 0xFF) != 0);  /* full — must not overwrite */
+    printf("PASS test_write_full\n");
+}
+
+/* Test 4 — wrap-around: fill, drain, write again */
+void test_wrap_around(void) {
+    RingBuf rb;
+    uint8_t out = 0;
+    rb_init(&rb);
+
+    for (int i = 0; i < BUFFER_SIZE; i++) rb_write(&rb, (uint8_t)i);
+    for (int i = 0; i < BUFFER_SIZE; i++) rb_read(&rb, &out);
+
+    /* head and tail must have wrapped — new write must succeed */
+    assert(rb_write(&rb, 0x42) == 0);
+    assert(rb_read(&rb, &out) == 0);
+    assert(out == 0x42);
+    printf("PASS test_wrap_around\n");
+}
+
+/* Test 5 — ISR simulation: simulate_isr() writes, main reads */
+void test_isr_write_main_read(void) {
+    rb_init(&uart_buf);
+    rx_flag = 0;
+
+    simulate_isr(0x55);   /* pretend ISR fired with byte 0x55 */
+    assert(rx_flag == 1); /* flag must be set */
+
+    uint8_t out = 0;
+    assert(rb_read(&uart_buf, &out) == 0);
+    assert(out == 0x55);
+    printf("PASS test_isr_write_main_read\n");
+}
+
+int main(void) {
+    test_fifo_order();
+    test_read_empty();
+    test_write_full();
+    test_wrap_around();
+    test_isr_write_main_read();
+    printf("All tests passed.\n");
+    return 0;
+}
+
+
+Why exactly these 5 tests
+test_fifo_order — verifies core queue property.
+test_read_empty — catches Bug #5 (no empty check in rb_read).
+test_write_full — catches Bug #3 (ISR writes when full).
+test_wrap_around — catches Bug #4 and #6 (head/tail not wrapped). Most important test.
+test_isr_write_main_read — verifies the ISR→main data path and rx_flag signalling.
+
+Phase 3 — Implementation  (~45 min)
+Implement the corrected ring buffer with ISR support. Fix every bug. Explain each decision out loud.
+
+/* ring_buffer.h */
+#ifndef RING_BUFFER_H
+#define RING_BUFFER_H
+
+#include <stdint.h>
+
+#define BUFFER_SIZE 8u
+#define RB_OK        0
+#define RB_ERR      -1
+
+typedef struct {
+    uint8_t  data[BUFFER_SIZE];
+    uint16_t head;
+    uint16_t tail;
+    uint16_t count;
+} RingBuf;
+
+/* Shared between ISR and main — must be volatile */
+extern volatile RingBuf uart_buf;
+extern volatile int     rx_flag;
+
+int  rb_init      (volatile RingBuf* rb);
+int  rb_write     (volatile RingBuf* rb, uint8_t byte);
+int  rb_read      (volatile RingBuf* rb, uint8_t* out);
+int  rb_is_empty  (volatile const RingBuf* rb);
+int  rb_is_full   (volatile const RingBuf* rb);
+void simulate_isr (uint8_t byte);   /* test helper */
+
+#endif /* RING_BUFFER_H */
+
+
+/* ring_buffer.c */
+#include "ring_buffer.h"
+
+/* volatile: both variables are accessed from ISR context */
+volatile RingBuf uart_buf;
+volatile int     rx_flag = 0;
+
+int rb_init(volatile RingBuf* rb) {
+    if (rb == NULL) return RB_ERR;
+    rb->head  = 0u;
+    rb->tail  = 0u;
+    rb->count = 0u;
+    return RB_OK;
+}
+
+int rb_is_empty(volatile const RingBuf* rb) {
+    if (rb == NULL) return RB_ERR;
+    return (rb->count == 0u) ? 1 : 0;
+}
+
+int rb_is_full(volatile const RingBuf* rb) {
+    if (rb == NULL) return RB_ERR;
+    return (rb->count == BUFFER_SIZE) ? 1 : 0;
+}
+
+/* Called from ISR — keep short, no blocking */
+int rb_write(volatile RingBuf* rb, uint8_t byte) {
+    if (rb == NULL)     return RB_ERR;
+    if (rb_is_full(rb)) return RB_ERR;  /* drop byte if full */
+
+    rb->data[rb->head] = byte;
+    rb->head = (uint16_t)((rb->head + 1u) % BUFFER_SIZE);
+    rb->count++;
+    return RB_OK;
+}
+
+/* Called from main loop */
+int rb_read(volatile RingBuf* rb, uint8_t* out) {
+    if (rb == NULL || out == NULL) return RB_ERR;
+    if (rb_is_empty(rb))           return RB_ERR;
+
+    *out = rb->data[rb->tail];
+    rb->tail = (uint16_t)((rb->tail + 1u) % BUFFER_SIZE);
+    rb->count--;
+    return RB_OK;
+}
+
+/* Hardware ISR — fires when UART byte arrives */
+void UART_RX_ISR(void) {
+    uint8_t byte = UART_DATA_REG;
+    rb_write(&uart_buf, byte);
+    rx_flag = 1;
+}
+
+/* Test helper — simulates ISR firing with a given byte */
+void simulate_isr(uint8_t byte) {
+    rb_write(&uart_buf, byte);
+    rx_flag = 1;
+}
+
+/* Main loop — safe read+clear of rx_flag */
+void main_loop(void) {
+    while (1) {
+        /* Disable interrupts to atomically read+clear flag */
+        /* CRITICAL_SECTION_ENTER(); */
+        int flag = rx_flag;
+        rx_flag  = 0;
+        /* CRITICAL_SECTION_EXIT(); */
+
+        if (flag) {
+            uint8_t byte;
+            while (rb_read(&uart_buf, &byte) == RB_OK) {
+                process_byte(byte);
+            }
+        }
+    }
+}
+
+
+Key things to say out loud during implementation
+On volatile — "uart_buf and rx_flag are shared with an ISR so I declare them volatile — without it the compiler may cache values and the main loop never sees ISR updates."
+On wrap-around — "head and tail must wrap with % BUFFER_SIZE — this is what makes it a ring."
+On full check in ISR — "The ISR must check if full before writing — in embedded it is better to drop a byte than to corrupt memory."
+On atomic flag — "Reading and clearing rx_flag must be atomic — I read into a local variable then clear, inside a critical section, so an ISR between those two lines cannot lose an event."
+On drain loop — "I drain all available bytes in one main_loop tick with a while loop — a single read could miss bytes if the ISR fires multiple times."
+
+Follow-up Questions — Be Ready
+
+volatile
+What does volatile do? — Tells the compiler: do not cache this variable in a register. Re-read from memory every time. Required for variables shared with ISRs or memory-mapped hardware.
+Is volatile enough for thread safety? — No. Volatile prevents caching but does not make read-modify-write atomic. You still need a critical section.
+
+ISR rules
+What can you NOT do inside an ISR? — No blocking calls, no malloc, no printf, no mutex lock. Keep it short: set a flag, write to a buffer, return.
+What is a critical section in bare-metal C? — Disable interrupts before accessing shared data, re-enable after. Prevents the ISR from preempting a partial read-modify-write.
+
+Ring buffer
+Why is wrap-around the most dangerous bug? — It causes silent out-of-bounds memory writes — corrupts adjacent memory with no immediate crash, very hard to debug.
+What happens when the buffer is full and the ISR keeps firing? — With the fix: bytes are dropped. Without the fix: memory corruption. Dropping is always safer in embedded.
