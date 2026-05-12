@@ -1,0 +1,507 @@
+C programming
+Pointers, arrays, memory layout.
+Structs, bitwise operations, static vs dynamic memory.
+Concurrency basics, race conditions, thread safety.
+Writing efficient code for embedded/real-time systems.
+Embedded systems
+Interrupts, timing constraints, latency, CPU utilization.
+Real-time behavior, scheduling, synchronization.
+Multi-core programming concepts.
+Fixed-point vs floating-point considerations.
+5G / 4G / telecom
+3GPP basics, PHY layer vs higher layers.
+Uplink and downlink concepts.
+OFDM, modulation, coding, MIMO, HARQ.
+Radio measurements, signal quality indicators, interference.
+Difference between 4G LTE and 5G NR at a high level.
+Signal processing / RF
+Sampling, FFT/IFFT, filtering, quantization.
+SNR, BER, latency, throughput tradeoffs.
+Basic concepts of channel estimation and synchronization.
+IQ samples, distortion, noise, and frequency offset.
+Baseband / DSP / real-time systems
+How to optimize algorithms for DSP processors.
+Cache efficiency, vectorization, pipeline awareness.
+Determinism and deadline handling.
+Reading and reasoning about performance bottlenecks.
+Design / architecture
+How you would structure embedded code modules.
+Separation of concerns, interface design, testability.
+Handling error cases and state machines.
+Experience with verification and validation.
+
+Task
+What They Want
+Sample Code Approach
+Circular buffer
+Real-time data (IQ samples)
+int buf[SIZE]; int head=0, tail=0; bool full() { return (head+1)%SIZE == tail; }
+CRC calculation
+Packet integrity in L1
+Bitwise polynomial division (CRC-16/32)
+Bit packing/unpacking
+Efficient PHY headers
+Shift/mask bits into uint32_t
+
+
+
+
+Switch(enum state) with transitions
+
+
+DSP no-float
+
+
+Interrupt handler
+Timer/RX events
+void ISR() { volatile flag=1; }
+Ring buffer overflow detect
+Logging metrics
+Count drops, size checks
+
+Embedded C:
+"Difference volatile vs const? Use in ISR?" (Volatile for HW regs.)
+"Detect buffer overflow." (Size checks, canaries.)
+"Endianness swap for multi-core."
+"Implement debouncing or PWM timer."
+5G RAN L1 (Light for juniors):
+"UL vs DL in PHY?" (UL PUSCH/PRACH; DL PDSCH/PDCCH.)
+"Role of HARQ?" (Retransmit failed blocks.)
+"What is OFDM in 5G?" (Multi-carrier modulation.)
+"DMRS purpose?" (Channel estimation.)
+Wireless/3GPP:
+"MIB/SIB in 5G?" (MIB: basic cell info; SIB: access params.)
+"Handover types?" (Intra/inter-RAT.)
+"SNR/BER impact on PHY."
+Behavioral/Role Fit:
+"Debug a real-time latency issue?"
+"Why baseband L1? 5G excitement?"
+Embedded C:
+"Volatile 언제? ISR 예시?"
+"Stack vs heap in RTOS?"
+"Endianness convert."
+5G/3GPP (Junior 수준):
+"PUSCH/PDSCH 역할?"
+"HARQ 프로세스 설명."
+"OFDM 기본 원리."
+1-5: 실시간 데이터 (L1 IQ 샘플)
+1. Circular buffer (push/pop/full/empty)
+2. Bit packing (PHY header MCS/RB)
+3. CRC-16/32 computation
+4. State machine (HARQ: IDLE→TX→ACK_WAIT)
+5. ISR safe flag (volatile bool rx_flag)
+
+// 6-9: Embedded 기본
+7. Volatile vs normal int 차이
+8. Stack vs Heap in RTOS
+9. Endianness swap (multi-core)
+
+// 10-12: 로직/알고리즘
+10. 패킷 sequence missing detect
+11. 날짜 +N일 (weekday)
+12. 숫자에 5 삽입해 최대값 
+핵심 4가지 구현 (순서대로 연습)
+1. memcpy (가장 기본)
+c
+void* my_memcpy(void* dest, const void* src, size_t n) {
+    uint8_t* d = (uint8_t*)dest;
+    const uint8_t* s = (const uint8_t*)src;
+    
+    for (size_t i = 0; i < n; i++) {
+        d[i] = s[i];
+    }
+    return dest;
+}
+테스트: memcpy(buf1, buf2, 16)
+2. memmove (중요! 겹침 처리)
+c
+void* my_memmove(void* dest, const void* src, size_t n) {
+    uint8_t* d = (uint8_t*)dest;
+    const uint8_t* s = (const uint8_t*)src;
+    
+    if (d <= s || d >= s + n) {  // No overlap
+        // Forward copy (memcpy처럼)
+        for (size_t i = 0; i < n; i++) d[i] = s[i];
+    } else {  // Overlap: backward
+        for (size_t i = n; i-- > 0; ) d[i] = s[i];
+    }
+    return dest;
+}
+
+memcpy는 겹치지 않는 메모리 복사, memmove는 겹쳐도 안전한 복사입니다. 면접에서는 “성능은 보통 memcpy가 더 빠르고, overlap 가능성이 있으면 memmove를 써야 한다 
+3. 최적화 버전 (32bit 단위)
+c
+void* fast_memcpy(void* dest, const void* src, size_t n) {
+    uint32_t* d = (uint32_t*)dest;
+    const uint32_t* s = (const uint32_t*)src;
+    uint8_t* d8, *s8;
+    
+    // 4바이트 단위 복사
+    while (n >= 4) {
+        *d++ = *s++;
+        n -= 4;
+    }
+    
+    // 남은 바이트
+    d8 = (uint8_t*)d; s8 = (const uint8_t*)s;
+    while (n--) *d8++ = *s8++;
+    
+    return dest;
+}
+embedded 포인트: "32bit DSP에서 4배 빠름"
+4. L1 전용: IQ 샘플 복사
+c
+// 1024 IQ 샘플 (I/Q pair) 복사
+typedef struct { int16_t i, q; } iq_sample_t;
+#define NUM_SAMPLES 1024
+
+void copy_iq_buffer(iq_sample_t* dest, const iq_sample_t* src) {
+    // 4바이트씩 복사 (struct packing 가정)
+    uint32_t* d32 = (uint32_t*)dest;
+    const uint32_t* s32 = (const uint32_t*)src;
+    
+    for (int i = 0; i < NUM_SAMPLES; i++) {
+        *d32++ = *s32++;  // I/Q pair 한꺼번에
+    }
+}
+
+1
+Number of 1 Bits
+Bit counting (CRC, parity)
+1sol
+2
+Reverse Bits
+Bit shuffling (L1 header)
+1sol
+3
+Single Number1,3,2 order 
+XOR 기본 (packet ID)
+1sol( singlenumber2,3 try again!!)
+4
+Hamming Distance
+Bit diff (error detection)
+1sol
+5
+Convert Number to Hex
+PHY state 출력
+Easy ⭐⭐⭐
+6
+Range Bitwise AND
+Register mask 연산
+1sol
+7
+Sum of Two Integers
+Bitwise add (no + 연산)
+
+
+
+8.utf-8
+Sum of two integers -> 받아올림, xor 
+2의 보수(2's Complement) 이용
+컴퓨터는 음수를 만들 때 비트를 반전시키고 1을 더합니다
+SB(가장 오른쪽 1) 추출:x & -x ,A와 B의 비트가 서로 다른 위치(맨 오른쪽 1) 
+숫자의 범위가$10^9$이하인가?" -> int로 충분합니다.
+"숫자의 범위가$10^{10}$이상인가?" -> 무조건 long long(C/C++ 기준)을 써야 합니다.
+"부호 있는 정수의 XOR 문제인가?" -> INT_MIN이 들어올 수 있으므로, 비트 연산( -diff)을 하기 전 안전하게 long 
+반드시 연습할 3가지 링버퍼 (C 전용)
+① Overwrite 버전 (실시간 신호 처리)
+c
+#define BUF_SIZE 1024
+#define MASK (BUF_SIZE-1)
+static int buffer[BUF_SIZE];
+static volatile int head = 0, tail = 0;
+
+bool push_overwrite(int value) {
+    buffer[head] = value;                    // 항상 쓰기
+    int next_head = (head + 1) & MASK;       // Power-of-2 최적화
+    if (next_head == tail) {                 // Full → tail 밀어냄
+        tail = (tail + 1) & MASK;            // 가장 오래된 데이터 삭제
+    }
+    head = next_head;
+    return true;
+}
+L1 용도: 최신 IQ 샘플만 유지
+② Producer-Consumer Lock-free (ISR + Main)
+c
+#define BUF_SIZE 1024
+#define MASK (BUF_SIZE-1)
+static int buffer[BUF_SIZE];
+static volatile int head = 0;    // ISR가 변경 → volatile 필수
+static volatile int tail = 0;    // Main이 변경 → volatile 필수
+
+// Producer (RX_ISR)
+void RX_ISR(void) {
+    buffer[head] = iq_sample;            // 최신 IQ 샘플
+    head = (head + 1) & MASK;            // Atomic increment
+}
+
+// Consumer (Main loop)
+bool process_sample(int* sample) {
+    if (head == tail) return false;      // Empty
+    *sample = buffer[tail];
+    tail = (tail + 1) & MASK;
+    return true;
+}
+핵심: volatile 위치 정확히!
+③ 가변 길이 패킷 버퍼 (Control Message)
+c
+#define MAX_PKT_SIZE 256
+#define NUM_PKTS 64
+static uint8_t pkt_buffer[NUM_PKTS][MAX_PKT_SIZE];
+static volatile uint16_t pkt_head = 0, pkt_tail = 0;
+static volatile uint8_t pkt_len[NUM_PKTS];  // 각 패킷 길이
+
+bool push_packet(const uint8_t* data, uint8_t len) {
+    uint16_t next_head = (pkt_head + 1) % NUM_PKTS;
+    if (next_head == pkt_tail) return false;  // Full
+    
+    if (len > MAX_PKT_SIZE) return false;
+    
+    // 패킷 전체 복사
+    uint8_t* dest = pkt_buffer[pkt_head];
+    for (int i = 0; i < len; i++) {
+        dest[i] = data[i];
+    }
+    pkt_len[pkt_head] = len;          // 길이 기록
+    pkt_head = next_head;
+    return true;
+}
+
+bool pop_packet(uint8_t* data, uint8_t* len) {
+    if (pkt_head == pkt_tail) return false;
+    *len = pkt_len[pkt_tail];
+    uint8_t* src = pkt_buffer[pkt_tail];
+    for (int i = 0; i < *len; i++) {
+        data[i] = src[i];
+    }
+    pkt_tail = (pkt_tail + 1) % NUM_PKTS;
+    return true;
+Lock-free Ring Buffer 완전 구현 (ISR → Main)
+c
+#define BUF_SIZE 1024
+#define MASK (BUF_SIZE - 1)  // 1023
+
+static int buffer[BUF_SIZE];
+static volatile int head = 0;  // ISR WRITE → volatile 필수
+static volatile int tail = 0;  // Main READ → volatile 필수
+
+// Producer: RX_ISR (실시간 IQ 샘플)
+void __attribute__((interrupt)) RX_ISR(void) {
+    buffer[head] = iq_sample;              // 데이터 쓰기
+    int next_head = (head + 1) & MASK;     // Lock-free increment
+    head = next_head;                      // Memory barrier 자동
+}
+
+// Consumer: Main loop (데이터 처리)
+bool pop_sample(int* sample) {
+    if (head == tail) return false;        // Empty 체크
+    *sample = buffer[tail];                // 데이터 읽기  
+    tail = (tail + 1) & MASK;              // Consumer increment
+    return true;
+}
+
+int get_count(void) {
+    return (head - tail) & MASK;           // 사용 중인 샘플 수
+}
+🔥 핵심 기술 포인트 (인터뷰 답변)
+항목
+왜 이렇게?
+인터뷰 답변
+volatile int head/tail
+ISR↔Main 데이터 경합
+"컴파일러 최적화 무시, 최신값 보장"
+& MASK 대신 %
+Branchless, 3cycle 빠름
+"Power-of-2 크기로 % → & 최적화"
+No atomic/mutex
+Lock-free, 10μs ISR
+"ISR에서 락 = 데드락, CAS 불가"
+head==tail empty
+Full/Empty 구분
+"count = (head-tail)&MASK로 해결"
+
+실전 테스트 케이스
+c
+// 테스트 시나리오
+RX_ISR(); RX_ISR();           // ISR 2개 데이터
+pop_sample(&val1);           // Main 1개 처리  
+assert(get_count() == 1);    // 1개 남음
+
+// Overflow 체크
+for(int i=0; i<BUF_SIZE+10; i++) RX_ISR();
+assert(get_count() == BUF_SIZE);  // 최대치 유지
+⚡ Advanced: Overwrite 버전 (실시간 우선)
+c
+bool push_overwrite(int sample) {
+    int next_head = (head + 1) & MASK;
+    if (next_head == tail) {           // Full
+        tail = (tail + 1) & MASK;      // Tail 밀어냄 (오래된 데이터 삭제)
+    }
+    buffer[head] = sample;
+    head = next_head;
+    return true;
+}
+🎤 인터뷰 완벽 답변
+text
+Q: "ISR에서 왜 volatile?"
+A: "ISR가 head 변경시 컴파일러가 최적화로 무시하면 
+   main 루프가 영원히 빈 버퍼로 봄. volatile로 
+   메모리 직접 읽기 보장."
+
+Q: "왜 Power-of-2 + & MASK?"
+A: "모듈러 연산 %1024 → 비트 &1023으로 3사이클 단축.
+   Branchless라 파이프라인 최적화."
+
+Q: "Full/Empty 어떻게 구분?"
+A: "head==tail은 empty만. count=(head-tail)&MASK로 
+   실제 사용량 계산."
+L1 실무 사용 예시
+text
+RX_ISR()    → IQ 샘플 수집 (100kHz)
+Main loop   → FFT 처리 (10kHz)
+→ Lock-free로 0.1%도 데이터 손실 없음!
+슬롯 하나 희생 (Ericsson L1 표준)
+c
+#define BUF_SIZE 1024
+static int buffer[BUF_SIZE];
+static volatile int head = 0, tail = 0;
+
+bool is_full(void) {
+    return (head + 1) & (BUF_SIZE-1) == tail;  // 1칸 남김
+}
+
+bool is_empty(void) {
+    return head == tail;
+}
+
+bool push(int value) {
+    if (is_full()) return false;
+    buffer[head] = value;
+    head = (head + 1) & (BUF_SIZE-1);
+    return true;
+}
+방법 2: Count 변수 (공간 100%)
+c
+static volatile int count = 0;
+
+bool is_full(void) { return count == BUF_SIZE; }
+bool is_empty(void) { return count == 0; }
+
+bool push_safe(int value) {
+    if (is_full()) return false;
+    buffer[head] = value;
+    head = (head + 1) & MASK;
+    count++;  // Atomic 증가
+    return true;
+}
+
+bool pop_safe(int* value) {
+    if (is_empty()) return false;
+    *value = buffer[tail];
+    tail = (tail + 1) & MASK;
+    count--;
+    return true;
+}
+방법 3: Full Flag (ISR 안전)
+c
+static volatile bool full_flag = false;
+
+bool is_full(void) { return full_flag; }
+bool is_empty(void) { return head == tail && !full_flag; }
+
+bool push_safe(int value) {
+    if (full_flag) return false;
+    buffer[head] = value;
+    int next_head = (head + 1) & MASK;
+    if (next_head == tail) full_flag = true;
+    head = next_head;
+    return true;
+}
+
+bool pop_safe(int* value) {
+    if (is_empty()) return false;
+    *value = buffer[tail];
+    tail = (tail + 1) & MASK;
+    full_flag = false;
+    return true;
+}
+🚀 ISR + Main 완전 구현 (방법 1 추천)
+c
+// L1 RX ISR (100kHz)
+void __attribute__((interrupt)) RX_ISR(void) {
+    push_nocheck(iq_sample);  // 5μs 내 처리
+}
+
+// Main FFT 루프 (10kHz)
+void main_loop(void) {
+    int sample;
+    while (pop_safe(&sample)) {
+        fft_process(sample);  // 50μs 처리
+    }
+}
+
+✅ 테스트 케이스
+c
+// 빈 상태
+assert(is_empty() == true);
+
+// 1개 push
+push_safe(42);
+assert(is_empty() == false);
+assert(is_full() == false);
+
+// 꽉 참
+for(int i=0; i<1023; i++) push_safe(i);
+assert(!is_full());  // 아직 아님
+push_safe(1023);     // 이제 꽉 참
+assert(is_full());
+4가지 방법 비교 (장단점)
+방법
+Full 조건
+Empty 조건
+공간 효율
+복잡도
+추천도
+① 슬롯 하나 희생
+(head+1)%N == tail
+head == tail
+N-1
+⭐⭐⭐⭐⭐
+L1 최고
+② Count 변수
+count == N
+count == 0
+N
+⭐⭐⭐⭐
+실시간 OK
+③ Full Flag
+full == true
+head==tail && !full
+N
+⭐⭐⭐
+복잡
+④ Head/Tail +1
+head == tail+1
+head == tail
+N
+⭐⭐
+❌ 피함
+
+
+Strcopy
+Strncpy
+Strlcpy
+
+Mmio vs dma?
+에릭슨 면접용 핵심 답변 (Professional View)
+면접관이 #pragma once에 대해 물으면 이렇게 답변하세요.
+"#pragma once는 헤더 파일의 중복 포함을 방지하기 위한 지시자입니다. 기존의 #ifndef방식보다 작성하기 편리하고 휴먼 에러(매크로 이름 중복)를 방지 할 수 있습니다 특히 대규모 L1 프로젝트에서는 빌드 성능 향상 에도 도움이 됩니다. 다만, 이식성이 극도로 중요한 레거시 시스템에서는 표준 방식인 #ifndef와 혼용하기도 합니다.
+gcc -fstack-protector-all -fstack-check -Wall -Wextra
+Stack Canary: 함수 끝에 값 검증
+Stack Check: 스택 경계 확인
+Siwithc acse basic, typedef eum 
+printf  practic
+문자열 리터럴은 상수 데이터로서 메모리 절약과 시스템 안정성 을 위해 Read-Only 영역에 배치 
+char* str = "hello"; // 1. "hello"는 Read-Only(Data) 영역에 저장됨
+str[0] = 'H';        // 2. 읽기 전용 메모리에 쓰려고 함 → SEGV(Segmentation Fault)!
+해결책: char str[] = "hello";
