@@ -1,0 +1,100 @@
+/* ring_buffer.h */
+#ifndef RING_BUFFER_H
+#define RING_BUFFER_H
+
+#include <stdint.h>
+
+#define BUFFER_SIZE 8u                      /* 반드시 2의 제곱 */
+#define BUFFER_MASK (BUFFER_SIZE - 1u)      /* 0x07 */
+
+typedef struct {
+    uint8_t  data[BUFFER_SIZE];
+    uint16_t head;   /* ISR만 수정 */
+    uint16_t tail;   /* main만 수정 */
+} RingBuf;
+
+extern volatile RingBuf uart_buf;
+extern volatile int     rx_flag;
+
+int  rb_init    (volatile RingBuf* rb);
+int  rb_write   (volatile RingBuf* rb, uint8_t byte);
+int  rb_read    (volatile RingBuf* rb, uint8_t* out);
+void simulate_isr(uint8_t byte);
+
+#endif
+c/* ring_buffer.c */
+#include "ring_buffer.h"
+
+volatile RingBuf uart_buf;
+volatile int     rx_flag = 0;
+
+int rb_init(volatile RingBuf* rb) {
+    if (rb == NULL) return -1;
+    rb->head = 0u;
+    rb->tail = 0u;
+    return 0;
+}
+
+static int rb_is_empty(volatile const RingBuf* rb) {
+    return rb->head == rb->tail;
+}
+
+static int rb_is_full(volatile const RingBuf* rb) {
+    return ((rb->head + 1u) & BUFFER_MASK) == rb->tail;
+}
+
+/* ISR only — lock-free, head만 수정 */
+int rb_write(volatile RingBuf* rb, uint8_t byte) {
+    if (rb == NULL)     return -1;
+    if (rb_is_full(rb)) return -1;
+
+    rb->data[rb->head] = byte;
+    rb->head = (rb->head + 1u) & BUFFER_MASK;  /* & mask */
+    return 0;
+}
+
+/* main only — lock-free, tail만 수정 */
+int rb_read(volatile RingBuf* rb, uint8_t* out) {
+    if (rb == NULL || out == NULL) return -1;
+    if (rb_is_empty(rb))           return -1;
+
+    *out     = rb->data[rb->tail];
+    rb->tail = (rb->tail + 1u) & BUFFER_MASK;  /* & mask */
+    return 0;
+}
+
+void UART_RX_ISR(void) {
+    uint8_t byte = UART_DATA_REG;
+    rb_write(&uart_buf, byte);
+    rx_flag = 1;
+}
+
+void simulate_isr(uint8_t byte) {
+    rb_write(&uart_buf, byte);
+    rx_flag = 1;
+}
+
+void main_loop(void) {
+    while (1) {
+        /* CRITICAL_SECTION_ENTER(); */
+        int flag = rx_flag;
+        rx_flag  = 0;
+        /* CRITICAL_SECTION_EXIT(); */
+
+        if (flag) {
+            uint8_t byte;
+            while (rb_read(&uart_buf, &byte) == 0) {
+                process_byte(byte);
+            }
+        }
+    }
+}
+
+/* 이걸 막힘없이 쓸 수 있냐 */
+int rb_write(volatile RingBuf* rb, uint8_t byte) {
+    if (rb == NULL)     return -1;
+    if (rb_is_full(rb)) return -1;
+    rb->data[rb->head] = byte;
+    rb->head = (rb->head + 1u) & BUFFER_MASK;
+    return 0;
+}
