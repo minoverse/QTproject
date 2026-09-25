@@ -14,18 +14,18 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QDoubleSpinBox>
-#include <QCoreApplication> //long loop 동안 UI 멈추는 것 방지
+#include <QCoreApplication>
 #include <QDir>
 #include <QDateTime>
 #include <QFileInfo>
-#include <QCheckBox> // 옵션 ON/OFF 체크
-#include <QComboBox> //함수 선택
-
+#include <QCheckBox>
+#include <QComboBox>
+#include <gsl/gsl_sf_gamma.h>
 #include <cmath>
 
-ButtonNetwork::ButtonNetwork(QWidget *parent) : QWidget(parent) //passing parent ensures proper Qt ownership and event propagation.
+ButtonNetwork::ButtonNetwork(QWidget *parent) : QWidget(parent)
 {
-    setMouseTracking(true); //마우스를 누르지 않아도 mouse move 이벤트를 받을 수 있게
+    setMouseTracking(true);
 
     bool ok;
     int userInput = QInputDialog::getInt(
@@ -65,8 +65,7 @@ void ButtonNetwork::mousePressEvent(QMouseEvent *event)
     // 2) create node
     if (buttons.size() >= maxNodes) return;
 
-    QPushButton* btn = new QPushButton(QString::number(buttons.size() + 1), this); //버튼에 노드 번호 label 붙이는 역할,
-    //부모가 삭제되면 자식 위젯도 자동으로 삭제됨 (Qt parent-child ownership)
+    QPushButton* btn = new QPushButton(QString::number(buttons.size() + 1), this);
     btn->setGeometry(event->pos().x(), event->pos().y(), 40, 40);
     btn->setStyleSheet("border-radius: 20px; background-color: lightgray;");
     btn->show();
@@ -74,10 +73,9 @@ void ButtonNetwork::mousePressEvent(QMouseEvent *event)
     buttons.append(btn);
 }
 
-void ButtonNetwork::buttonClicked() // 노드 버튼을 두 번 선택해서 연결(Edge)을 만들기 위한 로직
+void ButtonNetwork::buttonClicked()
 {
-    QPushButton* clickedButton = qobject_cast<QPushButton*>(sender()); //sender :signal을 보낸 객체를 얻음,qobject_cast : Qt-safe cast, 실패 시 nullptr
-    //캐스팅은 데이터 타입을 강제로 변환
+    QPushButton* clickedButton = qobject_cast<QPushButton*>(sender());
     if (!clickedButton) return;
 
     if (!firstSelected) {
@@ -108,7 +106,7 @@ void ButtonNetwork::showFunctionDialog(QPushButton* start, QPushButton* end)
     layout.addWidget(&reluButton);
     layout.addWidget(&confirmButton);
 
-    connect(&confirmButton, &QPushButton::clicked, [&]() { //필요한 외부 변수를 참조로 가져다 쓰겠다”
+    connect(&confirmButton, &QPushButton::clicked, [&]() {
         QColor color;
         QString functionType;
 
@@ -218,12 +216,27 @@ QString ButtonNetwork::buildTerm(const QString& from,
 
 double ButtonNetwork::baseValueFromType(const QString& baseType, double baseConst) const
 {
+    qDebug() << "baseValueFromType called: baseType=" << baseType << "alpha2=" << alpha2;
+
     if (baseType == "alpha1") return alpha1;
-    if (baseType == "alpha2") return alpha2;
+    if (baseType == "alpha2") {
+        qDebug() << "MATCHED alpha2, returning" << alpha2;
+        return alpha2;
+    }
     if (baseType == "alpha3") return alpha3;
     if (baseType == "const")  return baseConst;
+
+    qDebug() << "NO MATCH! Returning baseConst=" << baseConst;
     return baseConst;
 }
+// double ButtonNetwork::baseValueFromType(const QString& baseType, double baseConst) const
+// {
+//     if (baseType == "alpha1") return alpha1;
+//     if (baseType == "alpha2") return alpha2;
+//     if (baseType == "alpha3") return alpha3;
+//     if (baseType == "const")  return baseConst;
+//     return baseConst;
+// }
 
 double ButtonNetwork::applyFn(const QString& fn, double x) const
 {
@@ -232,16 +245,23 @@ double ButtonNetwork::applyFn(const QString& fn, double x) const
     if (fn == "relu") return (x > 0.0) ? x : 0.0;
     return std::sin(x);
 }
-//nodeIndex가 node4 또는 node5일 때, 그 노드의 Gate(G2 또는 G1)를 yValue(현재 상태 값)에기반해서계산해 반환.
-//다른 노드면 0.0을 반환
+
 double ButtonNetwork::evalGateForNode(int nodeIndex, double yValue) const
 {
     const GateConfig* gate = nullptr;
-    if (nodeIndex == 3) gate = &gateNode4; // node4
-    if (nodeIndex == 4) gate = &gateNode5; // node5
+    if (nodeIndex == 3) gate = &gateNode4;
+    if (nodeIndex == 4) gate = &gateNode5;
     if (!gate) return 0.0;
 
     const double base = baseValueFromType(gate->baseType, gate->baseConst);
+
+    // ADD THIS DEBUG LINE:
+    if (nodeIndex == 3) {
+        qDebug() << "Gate4: baseType=" << gate->baseType
+                 << "alpha2=" << alpha2
+                 << "base=" << base;
+    }
+
     const double fnv  = applyFn(gate->fn, yValue);
     return base - gate->coeff * fnv;
 }
@@ -280,7 +300,7 @@ bool ButtonNetwork::ensureBaseResultDir()
         }
     }
     return true;
-}  //warning:문제는있지만 계속진행 critical: 문제가 심각 작업실패, 중단”
+}
 
 bool ButtonNetwork::createNewRunDir()
 {
@@ -311,7 +331,7 @@ void ButtonNetwork::writeRunInfoFile() const
     QFile f(runPath("run_info.txt"));
     if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) return;
 
-    QTextStream out(&f); //f는 QFile 객체,TextStream writes formatted text to a QIODevice
+    QTextStream out(&f);
     out << "=== Hopfield Fractional Network Run Info ===\n";
     out << "RunDir: " << currentRunDir << "\n";
     out << "Solver: " << solverMode << "\n";
@@ -375,8 +395,16 @@ double ButtonNetwork::reluFunction(double x) { return (x > 0.0) ? x : 0.0; }
 
 double ButtonNetwork::gammaWeight(int om, int r, double nu)
 {
-    double k = om - r;
-    return std::pow(k + 1.0, nu) - std::pow(k, nu);
+    int k = om - r;
+
+    if (k == 0) {
+        return gsl_sf_gamma(om - r + nu) / gsl_sf_gamma(om - r + 1) / gsl_sf_gamma(nu) ;  // Γ(ni)/Γ(1)/Γ(ni) = 1
+    } /*else {
+        double beta = std::tgamma(k) * std::tgamma(nu) / std::tgamma(k + nu);
+        return 1.0 / (k * beta);
+    }*/
+    //return 1.0 / static_cast<double>(k) / gsl_sf_beta(static_cast<double>(k), nu);
+    return 1.0 / k / gsl_sf_beta(k, nu);
 }
 
 
@@ -394,6 +422,7 @@ void ButtonNetwork::computeResults()
 void ButtonNetwork::runODE()
 {
     const int steps = tMax;
+     const int numNodes = buttons.size();  // ADD THIS LINE
     const double h = 0.01;
 
     QVector<QVector<double>> y(5, QVector<double>(steps + 1));
@@ -405,7 +434,7 @@ void ButtonNetwork::runODE()
         for (int i = 0; i < 5; ++i) {
             double sum = -y[i][t - 1];
 
-            for (const auto& conn : connections) { //버튼에 적힌 노드 번호가 1부터 시작인데, 배열/벡터 인덱스는 0부터 시작
+            for (const auto& conn : connections) {
                 int from = conn.start->text().toInt() - 1;
                 int to   = conn.end->text().toInt() - 1;
                 if (to != i) continue;
@@ -449,83 +478,118 @@ void ButtonNetwork::runODE()
 void ButtonNetwork::runGamma()
 {
     const int steps = tMax;
+    const int numNodes = buttons.size();
 
-    QVector<QVector<double>> y(5, QVector<double>(steps + 1));
-    y[0][0] = 0.8;
-    y[1][0] = 0.3;
-    y[2][0] = 0.4;
-    y[3][0] = 0.6;
-    y[4][0] = 0.7;
+    QVector<QVector<double>> y(numNodes, QVector<double>(steps + 1));
+
+    // Initial conditions
+    // for (int i = 0; i < numNodes; ++i) {
+    //     y[i][0] = 0.8;
+    // }
+    y[0][0] = 0.8; y[1][0] = 0.3; y[2][0] = 0.4; y[3][0] = 0.6; y[4][0] = 0.7;
 
     for (int om = 1; om <= steps; ++om) {
+        if (om % 100 == 0) QCoreApplication::processEvents();
 
-        for (int i = 0; i < 5; ++i)
-            y[i][om] = 0.0;  // important (same as C code)
+        for (int i = 0; i < numNodes; ++i)
+            y[i][om] = 0.0;
 
         for (int r = 1; r <= om; ++r) {
-
             double bg = gammaWeight(om, r, nu);
 
-            // y0
-            y[0][om] += (
-                            -y[0][r-1]
-                            + weightValues.value("s12",0.0)*tanhFunction(y[1][r-1])
-                            + weightValues.value("s13",0.0)*sinEFunction(y[2][r-1])
-                            + weightValues.value("s14",0.0)*sinEFunction(y[3][r-1])
-                            ) * bg;
+            for (int i = 0; i < numNodes; ++i) {
+                double sum = -y[i][r-1];
 
-            // y1
-            y[1][om] += (
-                            -y[1][r-1]
-                            + weightValues.value("s21",0.0)*sinEFunction(y[0][r-1])
-                            + weightValues.value("s23",0.0)*sinEFunction(y[2][r-1])
-                            + weightValues.value("s25",0.0)*sinEFunction(y[4][r-1])
-                            ) * bg;
+                // Add all incoming connections dynamically
+                for (const auto& conn : connections) {
+                    // int from = conn.start->text().toInt() - 1;
+                    // int to   = conn.end->text().toInt() - 1;
+                    // if (to != i) continue;
 
-            // y2
-            y[2][om] += (
-                            -y[2][r-1]
-                            + weightValues.value("s31",0.0)*tanhFunction(y[0][r-1])
-                            + weightValues.value("s32",0.0)*tanhFunction(y[1][r-1])
-                            + weightValues.value("s33",0.0)*sinEFunction(y[2][r-1])
-                            ) * bg;
+                    // QString key = "s" + conn.start->text() + conn.end->text();
+                    // double w = weightValues.value(key, 0.0);
+                    // double in = y[from][r-1];
+                    int target = conn.start->text().toInt() - 1;
+                    int source = conn.end->text().toInt() - 1;
 
-            // y3 (node4)
-            double gate4Term;
-            if (gateNode4.enabled) {
-                const double G2 = evalGateForNode(3, y[3][r-1]);
-                gate4Term = G2 * tanhFunction(y[3][r-1]);
-            } else {
-                gate4Term = (alpha2 - alpha3*sinEFunction(y[4][r-1]))
-                * tanhFunction(y[3][r-1]);
+                    if (target != i) continue;
+
+                    QString key = "s" + conn.start->text() + conn.end->text();
+                    double w = weightValues.value(key, 0.0);
+                    double in = y[source][r - 1];
+
+                    if (conn.function == "sin_exp") sum += w * sinEFunction(in);
+                    else if (conn.function == "tanh") sum += w * tanhFunction(in);
+                    else if (conn.function == "relu") sum += w * reluFunction(in);
+                }
+
+                // Gate for node4 (index 3)
+                // if (i == 3 && numNodes > 3) {
+                //     double gateTerm;
+                //     if (gateNode4.enabled) {
+                //         const double G2 = evalGateForNode(3, y[3][r-1]);
+                //         gateTerm = G2 * tanhFunction(y[3][r-1]);
+                //     } else {
+                //         if (numNodes > 4) {
+                //             gateTerm = (alpha2 - alpha3*sinEFunction(y[4][r-1]))
+                //             * tanhFunction(y[3][r-1]);
+                //         } else {
+                //             gateTerm = alpha2 * tanhFunction(y[3][r-1]);
+                //         }
+                //     }
+                //     sum += gateTerm;
+                // }
+                if (i == 3 && numNodes > 4) {
+                    double gateTerm =
+                        (alpha2 - alpha3 * sinEFunction(y[4][r - 1]))
+                        * tanhFunction(y[3][r - 1]);
+
+                    sum += gateTerm;
+                }
+
+                // Gate for node5 (index 4)
+                // if (i == 4 && numNodes > 4) {
+                //     double gateTerm;
+                //     if (gateNode5.enabled) {
+                //         const double G1 = evalGateForNode(4, y[4][r-1]);
+                //         gateTerm = G1 * tanhFunction(y[4][r-1]);
+                //     } else {
+                //         if (numNodes > 2) {
+                //             gateTerm = (1.0 - alpha1*tanhFunction(y[2][r-1]))
+                //             * tanhFunction(y[4][r-1]);
+                //         } else {
+                //             gateTerm = tanhFunction(y[4][r-1]);
+                //         }
+                //     }
+                //     sum += gateTerm;
+                // }
+                if (i == 4 && numNodes > 4) {
+                    double gateTerm =
+                        (1.0 - alpha1 * tanhFunction(y[2][r - 1]))
+                        * tanhFunction(y[4][r - 1]);
+
+                    sum += gateTerm;
+                }
+
+                y[i][om] += sum * bg;
             }
-
-            y[3][om] += (
-                            -y[3][r-1]
-                            + weightValues.value("s41",0.0)*tanhFunction(y[0][r-1])
-                            + gate4Term
-                            ) * bg;
-
-            // y4 (node5)
-            double gate5Term;
-            if (gateNode5.enabled) {
-                const double G1 = evalGateForNode(4, y[4][r-1]);
-                gate5Term = G1 * tanhFunction(y[4][r-1]);
-            } else {
-                gate5Term = (1.0 - alpha1*tanhFunction(y[2][r-1]))
-                * tanhFunction(y[4][r-1]);
-            }
-
-            y[4][om] += (
-                            -y[4][r-1]
-                            + weightValues.value("s52",0.0)*tanhFunction(y[1][r-1])
-                            + gate5Term
-                            ) * bg;
         }
 
-        // add initial condition (same as C code)
-        for (int i = 0; i < 5; ++i)
+        // Add initial conditions
+        for (int i = 0; i < numNodes; ++i)
             y[i][om] += y[i][0];
+        //Debug here
+        // if (om <= 50) {
+        //     qDebug().noquote()
+        //     << QString("om=%1 y=%2 %3 %4 %5 %6")
+        //             .arg(om)
+        //             .arg(y[0][om], 0, 'g', 17)
+        //             .arg(y[1][om], 0, 'g', 17)
+        //             .arg(y[2][om], 0, 'g', 17)
+        //             .arg(y[3][om], 0, 'g', 17)
+        //             .arg(y[4][om], 0, 'g', 17);
+        // }
+        //Debug end
     }
 
     saveAndDisplayResult(y, steps);
@@ -541,6 +605,9 @@ void ButtonNetwork::saveAndDisplayResult(const QVector<QVector<double>>& y, int 
     }
 
     QTextStream out(&f);
+    // for debug
+    out.setRealNumberNotation(QTextStream::ScientificNotation);
+    out.setRealNumberPrecision(17);
     for (int t = 0; t <= steps; ++t) {
         out << y[0][t] << " " << y[1][t] << " " << y[2][t] << " " << y[3][t] << " " << y[4][t] << "\n";
     }
@@ -689,7 +756,7 @@ void ButtonNetwork::showGraph()
     QProcess proc;
     proc.setWorkingDirectory(currentRunDir);
     proc.start("gnuplot", QStringList() << "plot.gnu");
-    //Qt에서 외부 프로그램(gnuplot)을 실행해서 PNG 그래프를 만든 다음, 성공하면 신호(signal)를 보내고, Linux에서는 파일을 열어주는 흐름
+
     if (!proc.waitForStarted()) {
         QMessageBox::critical(this, "Error", "Failed to start gnuplot. Is it installed?");
         return;
@@ -717,7 +784,7 @@ void ButtonNetwork::scanAlpha2()
     writeRunInfoFile();
     scanAlpha2ReuseCurrentRun();
 }
-//currentRunDir를 그대로 사용해 alpha2 값을 여러 개로 바꿔가며 시뮬레이션을 반복 실행,  결과파일로 저장(gnuplot으로 PNG도 만들려고 시도)하는alpha2 파라미터 스윕/스캔 함수
+
 void ButtonNetwork::scanAlpha2ReuseCurrentRun()
 {
     if (currentRunDir.isEmpty()) {
@@ -733,7 +800,7 @@ void ButtonNetwork::scanAlpha2ReuseCurrentRun()
 
     if (!(a2Step > 0.0) || a2Max < a2Min) {
         bool ok = true;
-        a2Min = QInputDialog::getDouble(this, "Alpha2 scan", "alpha2 min:", -10.0, -1000, 1000, 4, &ok); //text is default value
+        a2Min = QInputDialog::getDouble(this, "Alpha2 scan", "alpha2 min:", -10.0, -1000, 1000, 4, &ok);
         if (!ok) return;
         a2Max = QInputDialog::getDouble(this, "Alpha2 scan", "alpha2 max:",  10.0, -1000, 1000, 4, &ok);
         if (!ok) return;
@@ -758,6 +825,7 @@ void ButtonNetwork::scanAlpha2ReuseCurrentRun()
     QTextStream out2d(&f2d);
 
     const int steps = tMax;
+    const int numNodes = buttons.size();
     const double h = 0.01;
     const int transientStart = std::min(std::max(int(std::floor(steps * (transientPercent / 100.0))), 0), steps);
 
@@ -766,7 +834,14 @@ void ButtonNetwork::scanAlpha2ReuseCurrentRun()
         alpha2 = a2;
 
         QVector<QVector<double>> y(5, QVector<double>(steps + 1));
-        y[0][0] = 0.8; y[1][0] = 0.3; y[2][0] = 0.4; y[3][0] = 0.6; y[4][0] = 0.7;
+        // for (int i = 0; i < numNodes; ++i) {
+        //     y[i][0] = 0.8;
+        // }
+        y[0][0] = 0.8;
+        y[1][0] = 0.3;
+        y[2][0] = 0.4;
+        y[3][0] = 0.6;
+        y[4][0] = 0.7;
 
         if (solverMode == "ODE") {
             for (int t = 1; t <= steps; ++t) {
@@ -821,6 +896,41 @@ void ButtonNetwork::scanAlpha2ReuseCurrentRun()
                 for (int r = 1; r <= om; ++r) {
                     double bg = gammaWeight(om, r, nu);
 
+                    // ===== DEBUG START =====
+                    // if (om == 1 && r == 1) {
+
+                    //     const double sin_y1 = sinEFunction(y[0][r-1]);
+                    //     const double sin_y3 = sinEFunction(y[2][r-1]);
+                    //     const double sin_y5 = sinEFunction(y[4][r-1]);
+
+                    //     const double term1 = -y[1][r-1];
+                    //     const double term2 = weightValues.value("s21", 0.0) * sin_y1;
+                    //     const double term3 = weightValues.value("s23", 0.0) * sin_y3;
+                    //     const double term4 = weightValues.value("s25", 0.0) * sin_y5;
+
+                    //     const double sum12   = term1 + term2;
+                    //     const double sum123  = sum12 + term3;
+                    //     const double sum1234 = sum123 + term4;
+
+                    //     const double weighted = sum1234 * bg;
+
+                    //     qDebug().noquote()
+                    //         << "QT_DEBUG"
+                    //         << "\nbg       =" << QString::number(bg, 'g', 17)
+                    //         << "\nsin_y1   =" << QString::number(sin_y1, 'g', 17)
+                    //         << "\nsin_y3   =" << QString::number(sin_y3, 'g', 17)
+                    //         << "\nsin_y5   =" << QString::number(sin_y5, 'g', 17)
+                    //         << "\nterm1    =" << QString::number(term1, 'g', 17)
+                    //         << "\nterm2    =" << QString::number(term2, 'g', 17)
+                    //         << "\nterm3    =" << QString::number(term3, 'g', 17)
+                    //         << "\nterm4    =" << QString::number(term4, 'g', 17)
+                    //         << "\nsum12    =" << QString::number(sum12, 'g', 17)
+                    //         << "\nsum123   =" << QString::number(sum123, 'g', 17)
+                    //         << "\nsum1234  =" << QString::number(sum1234, 'g', 17)
+                    //         << "\nweighted =" << QString::number(weighted, 'g', 17);
+                    // }
+                    // ===== DEBUG END =====
+
                     y[0][om] += (-y[0][r-1] + weightValues.value("s12",0.0)*tanhFunction(y[1][r-1])
                                  + weightValues.value("s13",0.0)*sinEFunction(y[2][r-1])
                                  + weightValues.value("s14",0.0)*sinEFunction(y[3][r-1])) * bg;
@@ -829,31 +939,64 @@ void ButtonNetwork::scanAlpha2ReuseCurrentRun()
                                  + weightValues.value("s23",0.0)*sinEFunction(y[2][r-1])
                                  + weightValues.value("s25",0.0)*sinEFunction(y[4][r-1])) * bg;
 
+                    // ① Way of how  expression is evaluted in   compiler
+                    //     if (om == 1 && r == 1) {
+                    //     qDebug().noquote()
+                    //     << "QT_AFTER_ACCUM ="
+                    //     << QString::number(y[1][om], 'g', 17);
+                    // }
+                    //Done
+
                     y[2][om] += (-y[2][r-1] + weightValues.value("s31",0.0)*tanhFunction(y[0][r-1])
                                  + weightValues.value("s32",0.0)*tanhFunction(y[1][r-1])
                                  + weightValues.value("s33",0.0)*sinEFunction(y[2][r-1])) * bg;
 
-                    double gate4Term;
-                    if (gateNode4.enabled) {
-                        const double G2 = evalGateForNode(3, y[3][r-1]);
-                        gate4Term = G2 * tanhFunction(y[3][r-1]);
-                    } else {
-                        gate4Term = (alpha2 - alpha3*sinEFunction(y[4][r-1])) * tanhFunction(y[3][r-1]);
-                    }
-                    y[3][om] += (-y[3][r-1] + weightValues.value("s41",0.0)*tanhFunction(y[0][r-1]) + gate4Term) * bg;
+                    // double gate4Term;
+                    // if (gateNode4.enabled) {
+                    //     const double G2 = evalGateForNode(3, y[3][r-1]);
+                    //     gate4Term = G2 * tanhFunction(y[3][r-1]);
+                    // } else {
+                    //     gate4Term = (alpha2 - alpha3*sinEFunction(y[4][r-1])) * tanhFunction(y[3][r-1]);
+                    // }
+                    // y[3][om] += (-y[3][r-1] + weightValues.value("s41",0.0)*tanhFunction(y[0][r-1]) + gate4Term) * bg;
 
-                    double gate5Term;
-                    if (gateNode5.enabled) {
-                        const double G1 = evalGateForNode(4, y[4][r-1]);
-                        gate5Term = G1 * tanhFunction(y[4][r-1]);
-                    } else {
-                        gate5Term = (1.0 - alpha1*tanhFunction(y[2][r-1])) * tanhFunction(y[4][r-1]);
-                    }
-                    y[4][om] += (-y[4][r-1] + weightValues.value("s52",0.0)*tanhFunction(y[1][r-1]) + gate5Term) * bg;
+                    // double gate5Term;
+                    // if (gateNode5.enabled) {
+                    //     const double G1 = evalGateForNode(4, y[4][r-1]);
+                    //     gate5Term = G1 * tanhFunction(y[4][r-1]);
+                    // } else {
+                    //     gate5Term = (1.0 - alpha1*tanhFunction(y[2][r-1])) * tanhFunction(y[4][r-1]);
+                    // }
+                    // y[4][om] += (-y[4][r-1] + weightValues.value("s52",0.0)*tanhFunction(y[1][r-1]) + gate5Term) * bg;
+                    double gate4Term =
+                        (alpha2 - alpha3 * sinEFunction(y[4][r-1]))
+                        * tanhFunction(y[3][r-1]);
+
+                    y[3][om] += (-y[3][r-1]
+                                 + weightValues.value("s41",0.0) * tanhFunction(y[0][r-1])
+                                 + gate4Term) * bg;
+
+                    double gate5Term =
+                        (1.0 - alpha1 * tanhFunction(y[2][r-1]))
+                        * tanhFunction(y[4][r-1]);
+
+                    y[4][om] += (-y[4][r-1]
+                                 + weightValues.value("s52",0.0) * tanhFunction(y[1][r-1])
+                                 + gate5Term) * bg;
                 }
 
                 for (int i = 0; i < 5; ++i)
                     y[i][om] += y[i][0];
+
+                // ===== DEBUG START =====
+
+                // if (om == 1) {
+                //     qDebug().noquote()
+                //     << "QT_AFTER_INITIAL ="
+                //     << QString::number(y[1][om], 'g', 17);
+                // }
+
+                // ===== DEBUG END =====
 
                 if (om % sampleStride == 0 || om == steps) {
                     out3d << a2 << " " << om << " " << y[0][om] << " " << y[1][om] << " "
@@ -886,7 +1029,7 @@ void ButtonNetwork::scanAlpha2ReuseCurrentRun()
         QMessageBox::warning(this, "Gnuplot", "Failed to start gnuplot. Is it installed?");
         return;
     }
-//nuplot 실행 결과가 실패인지 성공인지 판단해서, 실패면 경고 띄우고 종료 / 성공이면 파일 저장 완료 signal을 emit
+
     const bool finished = proc.waitForFinished(-1);
     const QString gpStdout = QString::fromLocal8Bit(proc.readAllStandardOutput());
     const QString gpStderr = QString::fromLocal8Bit(proc.readAllStandardError());
@@ -944,7 +1087,7 @@ void ButtonNetwork::generateAlpha2ScanGnuplotScripts() const
 }
 
 // ================= Click-edit connections =================
-//선(연결선)을 클릭했는지 판단하는 hit-testing 용도
+
 double ButtonNetwork::distancePointToSegment(const QPointF& p,
                                              const QPointF& a,
                                              const QPointF& b) const
@@ -1120,7 +1263,7 @@ void ButtonNetwork::editConnectionAt(int index)
 }
 
 // ================= Auto preset =================
-//같은 이름이 이미 있으면 새로 만들 때 덮어써야 하니까
+
 bool ButtonNetwork::copyOverwrite(const QString& src, const QString& dst) const
 {
     if (!QFileInfo::exists(src)) return false;
@@ -1182,46 +1325,80 @@ void ButtonNetwork::addOrUpdateConnection(int from, int to, double w, const QStr
 
 void ButtonNetwork::runAutoTestNode5Preset()
 {
+    // Prompt user for alpha2 value
+    bool ok;
+    double userAlpha2 = QInputDialog::getDouble(
+        this,
+        "Set Alpha2 for Test",
+        "Enter alpha2 value (0.0, 1.0, 3.0, or 6.0):",
+        0.01,      // default
+        -100.0,   // min
+        100.0,    // max
+        2,        // decimals
+        &ok
+        );
+
+    if (!ok) return;
+
+    // SET ALPHA2 HERE!
+    // alpha2 = userAlpha2;
+    // alpha1 = 1.0;
+    // alpha3 = 1.0;
+    // nu = 0.70;
+    // tMax = 5000;
+    // solverMode = "GAMMA";
+    alpha2 = userAlpha2;
+    alpha1 = -2.2;
+    alpha3 = 1.2;
     nu = 0.70;
+
+    tMax = 1000;
     solverMode = "GAMMA";
     ensurePresetNodes5();
-
+    connections.clear();
+    weightValues.clear();
     addOrUpdateConnection(1, 4, -0.6, "sin_exp");
     addOrUpdateConnection(4, 1,  0.7, "tanh");
     addOrUpdateConnection(1, 3, -0.8, "sin_exp");
     addOrUpdateConnection(3, 1,  1.7, "tanh");
-    addOrUpdateConnection(2, 3,  2.0, "sin_exp");
+    addOrUpdateConnection(2, 3,  2.0, "sin_exp");//?
     addOrUpdateConnection(3, 2, -0.4, "tanh");
     addOrUpdateConnection(1, 2, -0.3, "tanh");
     addOrUpdateConnection(2, 1, -3.0, "sin_exp");
     addOrUpdateConnection(2, 5,  0.4, "sin_exp");
     addOrUpdateConnection(5, 2,  1.7, "tanh");
+    addOrUpdateConnection(3, 3, 3.0, "sin_exp"); // s33
 
-    if (equationEditor) equationEditor->append("\n[AUTO TEST Node5] preset applied. Running...\n");
+    if (equationEditor) {
+        equationEditor->append(QString("\n[AUTO TEST] alpha2 = %1, nu = %2\n")
+                                   .arg(alpha2).arg(nu));
+    }
 
     computeResults();
     const QString runDirFixed = currentRunDir;
-
+    showTable();
     showGraph();
-    scanAlpha2ReuseCurrentRun();
-    //경로 생성 함수
+    scanAlpha2ReuseCurrentRun();  // ADD THIS LINE - generates bifurcation diagrams
+
+    // Copy to test files with alpha2 in filename
+    QString a2str = QString::number(alpha2, 'f', 2).replace(".", "_");
+
     auto rp = [&](const QString& name){ return runDirFixed + "/" + name; };
 
-    copyOverwrite(rp("result.dat"),        rp("test_result.dat"));
-    copyOverwrite(rp("result_stream.csv"), rp("test_result_stream.csv"));
-    copyOverwrite(rp("result_final.csv"),  rp("test_result_final.csv"));
-    copyOverwrite(rp("params.txt"),        rp("test_params.txt"));
-    copyOverwrite(rp("table.txt"),         rp("test_table.txt"));
-    copyOverwrite(rp("plot.gnu"),          rp("test_plot.gnu"));
-    copyOverwrite(rp("y_all.png"),         rp("test_y_all.png"));
+    copyOverwrite(rp("y_all.png"),
+                  rp(QString("test_y_all_a2_%1.png").arg(a2str)));
+    copyOverwrite(rp("alpha2_y1.png"),
+                  rp(QString("test_alpha2_y1.png")));  // ADD THIS
+    copyOverwrite(rp("alpha2_y2.png"),
+                  rp(QString("test_alpha2_y2.png")));  // ADD THIS
+    copyOverwrite(rp("alpha2_y3.png"),
+                  rp(QString("test_alpha2_y3.png")));  // ADD THIS
+    copyOverwrite(rp("alpha2_y4.png"),
+                  rp(QString("test_alpha2_y4.png")));  // ADD THIS
+    copyOverwrite(rp("alpha2_y5.png"),
+                  rp(QString("test_alpha2_y5.png")));  // ADD THIS
 
-    copyOverwrite(rp("alpha2_scan_3d.dat"), rp("test_alpha2_scan_3d.dat"));
-    copyOverwrite(rp("alpha2_scan_2d.dat"), rp("test_alpha2_scan_2d.dat"));
-    copyOverwrite(rp("alpha2_y1.png"),      rp("test_alpha2_y1.png"));
-    copyOverwrite(rp("alpha2_y2.png"),      rp("test_alpha2_y2.png"));
-    copyOverwrite(rp("alpha2_y3.png"),      rp("test_alpha2_y3.png"));
-    copyOverwrite(rp("alpha2_y4.png"),      rp("test_alpha2_y4.png"));
-    copyOverwrite(rp("alpha2_y5.png"),      rp("test_alpha2_y5.png"));
-
-    if (equationEditor) equationEditor->append("\n[AUTO TEST Node5] done. Saved test_* in:\n" + runDirFixed + "\n");
+    if (equationEditor) {
+        equationEditor->append(QString("\n[AUTO TEST] Saved bifurcation diagrams\n"));
+    }
 }
