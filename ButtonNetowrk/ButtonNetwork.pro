@@ -11,3 +11,5 @@ SOURCES += \
 
 HEADERS += \
     buttonnetwork.h
+
+LIBS += -lgsl -lgslcblas -lm
