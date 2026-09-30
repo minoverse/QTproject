@@ -9,42 +9,21 @@ This project is a **Qt-based GUI tool** for building and simulating **Hopfield n
 Users can visually design a 5-node network, assign activation functions (sin, tanh, ReLU), set custom weights, and run the simulation with real-time output.
 
 
-# ButtonNetwork
+## Architecture
 
-Qt-based simulator for a five-node fractional-order network.
+The project is separated into independent components for GUI handling,
+five-node model definition, numerical solvers, validation, result output,
+and plotting.
 
-The application supports both Gamma-based fractional simulation and ODE simulation, together with network visualization, result export, parameter scanning, and plotting.
+This separation makes the numerical implementation easier to inspect and
+debug independently from the GUI.
 
-## Refactoring Goal
+### Refactoring Note
 
-The original implementation places GUI handling, model parameters, numerical calculations, validation, result generation, and plotting mainly inside `ButtonNetwork`.
-
-The purpose of this refactoring is to separate these responsibilities so that the numerical implementation can be inspected, validated, and debugged independently from the GUI.
-
-This is especially important for the current C-reference validation, where small numerical differences between the reference C implementation and the Qt implementation are being investigated.
-
-### Important Refactoring Rule
-
-The first refactoring stage must **not change the numerical implementation**.
-
-The existing:
-
-- equations
-- coefficients
-- initial conditions
-- Gamma/Beta calculations
-- ODE calculations
-- loop order
-- accumulation order
-- floating-point types
-- mathematical functions
-- solver parameters
-
-should be preserved.
-
-The first goal is **code separation, not algorithm modification or optimization**.
-
-After separation, the numerical output will be compared with the original implementation before further architectural changes are introduced.
+The refactoring preserves the existing numerical implementation, including
+the equations, parameters, Gamma/ODE calculations, and calculation order.
+Numerical behavior is validated against the original implementation after
+each major separation step.
 
 ---
 
@@ -454,216 +433,107 @@ SimulationResult
 
 # Debugging Separation
 
-The architecture is intended to make numerical debugging easier.
+The separated architecture makes it easier to identify the source of a numerical discrepancy.
 
 ```text
-Problem                           Component to inspect
-----------------------------------------------------------
-Wrong alpha/parameter          → FiveNodeParameters
-Wrong coefficient              → FiveNodeParameters
-Wrong equation                 → FiveNodeModel
-Wrong activation/gate          → FiveNodeModel
-Wrong BG/Gamma calculation     → Solver
-Wrong accumulation             → Solver
-Wrong ODE calculation          → Solver
-Wrong validation setup         → ValidationRunner
-Wrong saved numerical output   → ResultWriter
-Wrong visualization            → PlotManager
-Wrong GUI parameter transfer   → ButtonNetwork
+Problem                         Component
+------------------------------------------------
+Parameters / coefficients    → FiveNodeParameters
+Five-node equations          → FiveNodeModel
+Gamma / BG / accumulation    → Solver
+ODE calculation              → Solver
+Validation configuration     → ValidationRunner
+Saved numerical output       → ResultWriter
+Visualization                → PlotManager
+GUI parameter transfer       → ButtonNetwork
 ```
 
-This is particularly useful for investigating the current difference between the C reference and Qt results.
+This separation is particularly useful for the current comparison between the Qt implementation and the C reference implementation.
 
 ---
 
 # Refactoring Strategy
 
-The refactoring will be performed incrementally.
-
-## Stage 1 — Separate Existing Code
-
-Move the existing implementation into the new components without intentionally changing the numerical behavior.
-
-Recommended order:
+The existing implementation is separated incrementally without intentionally changing the numerical behavior.
 
 ```text
-1. FiveNodeParameters
+FiveNodeParameters
         ↓
-2. FiveNodeModel
-        ↓
-3. Solver
-   ├── Gamma
-   └── ODE
-        ↓
-4. ValidationRunner
-        ↓
-5. ResultWriter
-        ↓
-6. PlotManager
-        ↓
-7. Clean ButtonNetwork GUI code
-```
-
-At this stage:
-
-> Do not optimize or redesign the numerical equations.
-
----
-
-## Stage 2 — Numerical Regression Check
-
-After separation, compare the refactored output with the output from the original implementation.
-
-Use high-precision output:
-
-```text
-Original Release result.dat
-            │
-            │ 17-digit comparison
-            ▼
-Refactored Release result.dat
-```
-
-The purpose is to verify that code separation itself did not change the numerical trajectory.
-
-This is especially important for numerically sensitive cases such as `alpha2 = 3`.
-
----
-
-## Stage 3 — Remove Duplicate Calculation Paths
-
-Only after Stage 2 passes should duplicated calculation logic be consolidated.
-
-For example, the alpha2 scan should eventually reuse the same Gamma solver used by a normal Gamma simulation.
-
-Conceptually:
-
-```text
-for each alpha2
-        ↓
-set alpha2
-        ↓
-Solver::runGamma(...)
-        ↓
-collect post-transient points
-```
-
-This avoids maintaining two different implementations of the same mathematical calculation.
-
----
-
-## Stage 4 — Signal / Slot Separation
-
-After numerical equivalence has been confirmed, the GUI and calculation flow can be connected using Qt signals and slots.
-
-```text
-ButtonNetwork
-      │
-      │ simulationRequested(parameters)
-      ▼
-Simulation Worker
-      │
-      ▼
-Solver
-      │
-      │ simulationFinished(result)
-      ▼
-ButtonNetwork / PlotManager
-```
-
----
-
-## Stage 5 — Worker Thread
-
-The numerical calculation can then be moved to a worker thread so that long simulations do not block the GUI.
-
-```text
-GUI THREAD
-────────────────────────────
-
-ButtonNetwork
-      │
-      │ signal
-      ▼
-
-WORKER THREAD
-────────────────────────────
-
-SimulationWorker
-      │
-      ▼
 FiveNodeModel
-      │
-      ▼
-Solver
-      │
-      │ result signal
-      ▼
-
-GUI THREAD
-────────────────────────────
-
-ButtonNetwork
-      │
-      ├── ResultWriter
-      └── PlotManager
+        ↓
+Solver (Gamma / ODE)
+        ↓
+ValidationRunner
+        ↓
+ResultWriter
+        ↓
+PlotManager
+        ↓
+ButtonNetwork (GUI)
 ```
 
-QML is not required.
+After each major separation step, the numerical output is compared with the original implementation using high-precision output.
 
-The existing Qt Widgets GUI can continue to be used with `QObject`, signals/slots, and `QThread`.
+```text
+Original result.dat
+        ↓
+17-digit comparison
+        ↓
+Refactored result.dat
+```
+
+After numerical equivalence is confirmed, the GUI and calculation can be connected using Qt signals/slots and moved to a worker thread.
 
 ---
 
-# Current Validation Focus
+# Current Validation
 
-The current investigation compares the Qt Gamma implementation with the professor's C reference implementation.
+The current validation compares the Qt Gamma implementation with the C reference implementation.
 
 The main focus is the numerical behavior for different `alpha2` values, especially `alpha2 = 3`.
-
-The refactoring is therefore designed to make the following independently inspectable:
 
 ```text
 Validation configuration
         ↓
-Parameters
+FiveNodeParameters
         ↓
-Five-node equations
+FiveNodeModel
         ↓
-Gamma/BG calculation
+Gamma Solver
+        ↓
+SimulationResult
+        ↓
+ResultWriter / PlotManager
+```
 
-## 📸 Demo / Screenshots
+This structure allows the model parameters, equations, numerical solver, output, and visualization to be inspected independently.
 
-### Network Design & Simulation GUI
+---
+
+# Demo / Screenshots
+
+## Network Design & Simulation GUI
+
 <p align="center">
   <img src="docs/Screenshot_20260120_100149_Gallery.jpg" width="700"/>
 </p>
 
-### Simulation Output & Plot
+## Simulation Output & Plot
+
 <p align="center">
   <img src="docs/Screenshot_20260120_100142_Gallery.jpg" width="700"/>
 </p>
 
 ---
 
-##  Features
+# Features
 
--  **5-node network** (y₁ to y₅)
--  **Visual GUI node editor**
--  **Custom activation function per connection** (sin, tanh, relu)
--  **Choose solver:** ODE or Fractional (Gamma)
--  **Live output on right panel**
--  **Graph plotting** with Gnuplot
--  **Export equations** and **result table**
-
----
-
-        ↓
-Numerical result
-        ↓
-Saved data
-        ↓
-Plot
-```
-
-This separation should make it easier to identify whether a discrepancy originates from the model, numerical solver, validation configuration, output handling, or visualization.
+- 5-node network (`y₁` to `y₅`)
+- Visual GUI node editor
+- Custom activation function per connection (`sin`, `tanh`, `relu`)
+- ODE and fractional Gamma solvers
+- C-reference numerical validation
+- Alpha2 parameter scanning
+- Result/table display in the GUI
+- Result export (`.dat`, `.csv`)
+- Gnuplot visualization
