@@ -23,7 +23,7 @@
 #include <gsl/gsl_sf_gamma.h>
 #include <cmath>
 
-ButtonNetwork::ButtonNetwork(QWidget *parent) : QWidget(parent)
+ButtonNetwork::ButtonNetwork(QWidget *parent) : QWidget(parent), model(params), solver(params, model)
 {
     setMouseTracking(true);
 
@@ -167,14 +167,14 @@ void ButtonNetwork::paintEvent(QPaintEvent *)
             p.drawArc(loop, 0, 360 * 16);
 
             if (sIdx == 4) {
-                const double base = baseValueFromType(params.gateNode4.baseType, params.gateNode4.baseConst);
+                const double base = model.baseValueFromType(params.gateNode4.baseType, params.gateNode4.baseConst);
                 p.drawText(start.x() - 80, start.y() - 50,
                            QString("G2=%1-%2*%3(y4)")
                                .arg(base, 0, 'f', 3)
                                .arg(params.gateNode4.coeff, 0, 'f', 3)
                                .arg(params.gateNode4.fn));
             } else if (sIdx == 5) {
-                const double base = baseValueFromType(params.gateNode5.baseType, params.gateNode5.baseConst);
+                const double base = model.baseValueFromType(params.gateNode5.baseType, params.gateNode5.baseConst);
                 p.drawText(start.x() - 80, start.y() - 50,
                            QString("G1=%1-%2*%3(y5)")
                                .arg(base, 0, 'f', 3)
@@ -210,60 +210,6 @@ QString ButtonNetwork::buildTerm(const QString& from,
     if (function == "tanh")    return QString::number(val) + "*tanh(" + from + ")";
     if (function == "relu")    return QString::number(val) + "*relu(" + from + ")";
     return QString::number(val) + "*" + from;
-}
-
-// ================= Gate helpers =================
-
-double ButtonNetwork::baseValueFromType(const QString& baseType, double baseConst) const
-{
-    qDebug() << "baseValueFromType called: baseType=" << baseType << "alpha2=" << params.alpha2;
-
-    if (baseType == "alpha1") return params.alpha1;
-    if (baseType == "alpha2") {
-        qDebug() << "MATCHED alpha2, returning" << params.alpha2;
-        return params.alpha2;
-    }
-    if (baseType == "alpha3") return params.alpha3;
-    if (baseType == "const")  return baseConst;
-
-    qDebug() << "NO MATCH! Returning baseConst=" << baseConst;
-    return baseConst;
-}
-// double ButtonNetwork::baseValueFromType(const QString& baseType, double baseConst) const
-// {
-//     if (baseType == "alpha1") return alpha1;
-//     if (baseType == "alpha2") return alpha2;
-//     if (baseType == "alpha3") return alpha3;
-//     if (baseType == "const")  return baseConst;
-//     return baseConst;
-// }
-
-double ButtonNetwork::applyFn(const QString& fn, double x) const
-{
-    if (fn == "sin")  return std::sin(x);
-    if (fn == "tanh") return std::tanh(x);
-    if (fn == "relu") return (x > 0.0) ? x : 0.0;
-    return std::sin(x);
-}
-
-double ButtonNetwork::evalGateForNode(int nodeIndex, double yValue) const
-{
-    const GateConfig* gate = nullptr;
-    if (nodeIndex == 3) gate = &params.gateNode4;
-    if (nodeIndex == 4) gate = &params.gateNode5;
-    if (!gate) return 0.0;
-
-    const double base = baseValueFromType(gate->baseType, gate->baseConst);
-
-    // ADD THIS DEBUG LINE:
-    if (nodeIndex == 3) {
-        qDebug() << "Gate4: baseType=" << gate->baseType
-                 << "alpha2=" << params.alpha2
-                 << "base=" << base;
-    }
-
-    const double fnv  = applyFn(gate->fn, yValue);
-    return base - gate->coeff * fnv;
 }
 
 // ================= Run folder =================
@@ -388,24 +334,6 @@ void ButtonNetwork::saveParams(const QString& path)
 
 // ================= Solver core =================
 
-double ButtonNetwork::sinEFunction(double x) { return std::sin(x); }
-double ButtonNetwork::tanhFunction(double x) { return std::tanh(x); }
-double ButtonNetwork::reluFunction(double x) { return (x > 0.0) ? x : 0.0; }
-
-
-double ButtonNetwork::gammaWeight(int om, int r, double nu)
-{
-    int k = om - r;
-
-    if (k == 0) {
-        return gsl_sf_gamma(om - r + nu) / gsl_sf_gamma(om - r + 1) / gsl_sf_gamma(nu) ;  // Γ(ni)/Γ(1)/Γ(ni) = 1
-    } /*else {
-        double beta = std::tgamma(k) * std::tgamma(nu) / std::tgamma(k + nu);
-        return 1.0 / (k * beta);
-    }*/
-    //return 1.0 / static_cast<double>(k) / gsl_sf_beta(static_cast<double>(k), nu);
-    return 1.0 / k / gsl_sf_beta(k, nu);
-}
 
 
 void ButtonNetwork::computeResults()
@@ -415,184 +343,28 @@ void ButtonNetwork::computeResults()
     saveParams(runPath("params.txt"));
     writeRunInfoFile();
 
-    if (params.solverMode == "ODE") runODE();
-    else runGamma();
-}
+    QVector<SolverConnection> solverConnections;
+    solverConnections.reserve(connections.size());
 
-void ButtonNetwork::runODE()
-{
-    const int steps = params.tMax;
-     const int numNodes = buttons.size();  // ADD THIS LINE
-    const double h = 0.01;
-
-    QVector<QVector<double>> y(5, QVector<double>(steps + 1));
-    y[0][0] = 0.8; y[1][0] = 0.3; y[2][0] = 0.4; y[3][0] = 0.6; y[4][0] = 0.7;
-
-    for (int t = 1; t <= steps; ++t) {
-        if (t % 400 == 0) QCoreApplication::processEvents();
-
-        for (int i = 0; i < 5; ++i) {
-            double sum = -y[i][t - 1];
-
-            for (const auto& conn : connections) {
-                int from = conn.start->text().toInt() - 1;
-                int to   = conn.end->text().toInt() - 1;
-                if (to != i) continue;
-
-                QString key = "s" + conn.start->text() + conn.end->text();
-                double w = weightValues.value(key, 0.0);
-                double in = y[from][t - 1];
-
-                if (conn.function == "sin_exp") sum += w * sinEFunction(in);
-                else if (conn.function == "tanh") sum += w * tanhFunction(in);
-                else if (conn.function == "relu") sum += w * reluFunction(in);
-            }
-
-            if (i == 3) {
-                if (params.gateNode4.enabled) {
-                    const double G2 = evalGateForNode(3, y[3][t - 1]);
-                    sum += G2 * tanhFunction(y[3][t - 1]);
-                } else {
-                    sum += (params.alpha2 - params.alpha3 * sinEFunction(y[4][t - 1]))
-                         * tanhFunction(y[3][t - 1]);
-                }
-            }
-
-            if (i == 4) {
-                if (params.gateNode5.enabled) {
-                    const double G1 = evalGateForNode(4, y[4][t - 1]);
-                    sum += G1 * tanhFunction(y[4][t - 1]);
-                } else {
-                    sum += (1 - params.alpha1 * tanhFunction(y[2][t - 1]))
-                         * tanhFunction(y[4][t - 1]);
-                }
-            }
-
-            y[i][t] = y[i][t - 1] + h * sum; // Euler
-        }
+    for (const auto& conn : connections) {
+        SolverConnection sc;
+        sc.firstNode  = conn.start->text().toInt();
+        sc.secondNode = conn.end->text().toInt();
+        sc.function   = conn.function;
+        solverConnections.append(sc);
     }
 
-    saveAndDisplayResult(y, steps);
-}
+    QVector<QVector<double>> y;
 
-void ButtonNetwork::runGamma()
-{
-    const int steps = params.tMax;
-    const int numNodes = buttons.size();
-
-    QVector<QVector<double>> y(numNodes, QVector<double>(steps + 1));
-
-    // Initial conditions
-    // for (int i = 0; i < numNodes; ++i) {
-    //     y[i][0] = 0.8;
-    // }
-    y[0][0] = 0.8; y[1][0] = 0.3; y[2][0] = 0.4; y[3][0] = 0.6; y[4][0] = 0.7;
-
-    for (int om = 1; om <= steps; ++om) {
-        if (om % 100 == 0) QCoreApplication::processEvents();
-
-        for (int i = 0; i < numNodes; ++i)
-            y[i][om] = 0.0;
-
-        for (int r = 1; r <= om; ++r) {
-            double bg = gammaWeight(om, r, params.nu);
-
-            for (int i = 0; i < numNodes; ++i) {
-                double sum = -y[i][r-1];
-
-                // Add all incoming connections dynamically
-                for (const auto& conn : connections) {
-                    // int from = conn.start->text().toInt() - 1;
-                    // int to   = conn.end->text().toInt() - 1;
-                    // if (to != i) continue;
-
-                    // QString key = "s" + conn.start->text() + conn.end->text();
-                    // double w = weightValues.value(key, 0.0);
-                    // double in = y[from][r-1];
-                    int target = conn.start->text().toInt() - 1;
-                    int source = conn.end->text().toInt() - 1;
-
-                    if (target != i) continue;
-
-                    QString key = "s" + conn.start->text() + conn.end->text();
-                    double w = weightValues.value(key, 0.0);
-                    double in = y[source][r - 1];
-
-                    if (conn.function == "sin_exp") sum += w * sinEFunction(in);
-                    else if (conn.function == "tanh") sum += w * tanhFunction(in);
-                    else if (conn.function == "relu") sum += w * reluFunction(in);
-                }
-
-                // Gate for node4 (index 3)
-                // if (i == 3 && numNodes > 3) {
-                //     double gateTerm;
-                //     if (gateNode4.enabled) {
-                //         const double G2 = evalGateForNode(3, y[3][r-1]);
-                //         gateTerm = G2 * tanhFunction(y[3][r-1]);
-                //     } else {
-                //         if (numNodes > 4) {
-                //             gateTerm = (alpha2 - alpha3*sinEFunction(y[4][r-1]))
-                //             * tanhFunction(y[3][r-1]);
-                //         } else {
-                //             gateTerm = alpha2 * tanhFunction(y[3][r-1]);
-                //         }
-                //     }
-                //     sum += gateTerm;
-                // }
-                if (i == 3 && numNodes > 4) {
-                    double gateTerm =
-                        (params.alpha2 - params.alpha3 * sinEFunction(y[4][r - 1]))
-                        * tanhFunction(y[3][r - 1]);
-
-                    sum += gateTerm;
-                }
-
-                // Gate for node5 (index 4)
-                // if (i == 4 && numNodes > 4) {
-                //     double gateTerm;
-                //     if (gateNode5.enabled) {
-                //         const double G1 = evalGateForNode(4, y[4][r-1]);
-                //         gateTerm = G1 * tanhFunction(y[4][r-1]);
-                //     } else {
-                //         if (numNodes > 2) {
-                //             gateTerm = (1.0 - alpha1*tanhFunction(y[2][r-1]))
-                //             * tanhFunction(y[4][r-1]);
-                //         } else {
-                //             gateTerm = tanhFunction(y[4][r-1]);
-                //         }
-                //     }
-                //     sum += gateTerm;
-                // }
-                if (i == 4 && numNodes > 4) {
-                    double gateTerm =
-                        (1.0 - params.alpha1 * tanhFunction(y[2][r - 1]))
-                        * tanhFunction(y[4][r - 1]);
-
-                    sum += gateTerm;
-                }
-
-                y[i][om] += sum * bg;
-            }
-        }
-
-        // Add initial conditions
-        for (int i = 0; i < numNodes; ++i)
-            y[i][om] += y[i][0];
-        //Debug here
-        // if (om <= 50) {
-        //     qDebug().noquote()
-        //     << QString("om=%1 y=%2 %3 %4 %5 %6")
-        //             .arg(om)
-        //             .arg(y[0][om], 0, 'g', 17)
-        //             .arg(y[1][om], 0, 'g', 17)
-        //             .arg(y[2][om], 0, 'g', 17)
-        //             .arg(y[3][om], 0, 'g', 17)
-        //             .arg(y[4][om], 0, 'g', 17);
-        // }
-        //Debug end
+    if (params.solverMode == "ODE") {
+        y = solver.runODE(solverConnections, weightValues);
+    } else {
+        y = solver.runGamma(buttons.size(),
+                            solverConnections,
+                            weightValues);
     }
 
-    saveAndDisplayResult(y, steps);
+    saveAndDisplayResult(y, params.tMax);
 }
 
 
@@ -825,193 +597,72 @@ void ButtonNetwork::scanAlpha2ReuseCurrentRun()
     QTextStream out2d(&f2d);
 
     const int steps = params.tMax;
-    const int numNodes = buttons.size();
-    const double h = 0.01;
-    const int transientStart = std::min(std::max(int(std::floor(steps * (transientPercent / 100.0))), 0), steps);
+    const int transientStart =
+        std::min(std::max(
+            int(std::floor(steps * (transientPercent / 100.0))),
+            0),
+            steps);
 
-    for (double a2 = a2Min; a2 <= a2Max + 1e-12; a2 += a2Step) {
+    QVector<SolverConnection> solverConnections;
+    solverConnections.reserve(connections.size());
+
+    for (const auto& conn : connections) {
+        SolverConnection sc;
+        sc.firstNode  = conn.start->text().toInt();
+        sc.secondNode = conn.end->text().toInt();
+        sc.function   = conn.function;
+        solverConnections.append(sc);
+    }
+
+    for (double a2 = a2Min;
+         a2 <= a2Max + 1e-12;
+         a2 += a2Step) {
+
         const double oldAlpha2 = params.alpha2;
         params.alpha2 = a2;
 
-        QVector<QVector<double>> y(5, QVector<double>(steps + 1));
-        // for (int i = 0; i < numNodes; ++i) {
-        //     y[i][0] = 0.8;
-        // }
-        y[0][0] = 0.8;
-        y[1][0] = 0.3;
-        y[2][0] = 0.4;
-        y[3][0] = 0.6;
-        y[4][0] = 0.7;
+        QVector<QVector<double>> y;
 
         if (params.solverMode == "ODE") {
-            for (int t = 1; t <= steps; ++t) {
-                if (t % 400 == 0) QCoreApplication::processEvents();
-
-                for (int i = 0; i < 5; ++i) {
-                    double sum = -y[i][t - 1];
-
-                    for (const auto& conn : connections) {
-                        int from = conn.start->text().toInt() - 1;
-                        int to   = conn.end->text().toInt() - 1;
-                        if (to != i) continue;
-
-                        QString key = "s" + conn.start->text() + conn.end->text();
-                        double w = weightValues.value(key, 0.0);
-                        double in = y[from][t - 1];
-
-                        if (conn.function == "sin_exp") sum += w * sinEFunction(in);
-                        else if (conn.function == "tanh") sum += w * tanhFunction(in);
-                        else if (conn.function == "relu") sum += w * reluFunction(in);
-                    }
-
-                    if (i == 3) {
-                        const double G2 = params.gateNode4.enabled ? evalGateForNode(3, y[3][t - 1])
-                                                            : (params.alpha2 - params.alpha3 * sinEFunction(y[4][t - 1]));
-                        sum += G2 * tanhFunction(y[3][t - 1]);
-                    }
-                    if (i == 4) {
-                        const double G1 = params.gateNode5.enabled ? evalGateForNode(4, y[4][t - 1])
-                                                            : (1 - params.alpha1 * tanhFunction(y[2][t - 1]));
-                        sum += G1 * tanhFunction(y[4][t - 1]);
-                    }
-
-                    y[i][t] = y[i][t - 1] + h * sum;
-                }
-
-                if (t % sampleStride == 0 || t == steps) {
-                    out3d << a2 << " " << t << " "
-                          << y[0][t] << " " << y[1][t] << " " << y[2][t] << " "
-                          << y[3][t] << " " << y[4][t] << "\n";
-                }
-            }
-        }
-        else {
-            // GAMMA MODE
-            for (int om = 1; om <= steps; ++om) {
-                if (om % 100 == 0) QCoreApplication::processEvents();
-
-                for (int i = 0; i < 5; ++i)
-                    y[i][om] = 0.0;
-
-                for (int r = 1; r <= om; ++r) {
-                    double bg = gammaWeight(om, r, params.nu);
-
-                    // ===== DEBUG START =====
-                    // if (om == 1 && r == 1) {
-
-                    //     const double sin_y1 = sinEFunction(y[0][r-1]);
-                    //     const double sin_y3 = sinEFunction(y[2][r-1]);
-                    //     const double sin_y5 = sinEFunction(y[4][r-1]);
-
-                    //     const double term1 = -y[1][r-1];
-                    //     const double term2 = weightValues.value("s21", 0.0) * sin_y1;
-                    //     const double term3 = weightValues.value("s23", 0.0) * sin_y3;
-                    //     const double term4 = weightValues.value("s25", 0.0) * sin_y5;
-
-                    //     const double sum12   = term1 + term2;
-                    //     const double sum123  = sum12 + term3;
-                    //     const double sum1234 = sum123 + term4;
-
-                    //     const double weighted = sum1234 * bg;
-
-                    //     qDebug().noquote()
-                    //         << "QT_DEBUG"
-                    //         << "\nbg       =" << QString::number(bg, 'g', 17)
-                    //         << "\nsin_y1   =" << QString::number(sin_y1, 'g', 17)
-                    //         << "\nsin_y3   =" << QString::number(sin_y3, 'g', 17)
-                    //         << "\nsin_y5   =" << QString::number(sin_y5, 'g', 17)
-                    //         << "\nterm1    =" << QString::number(term1, 'g', 17)
-                    //         << "\nterm2    =" << QString::number(term2, 'g', 17)
-                    //         << "\nterm3    =" << QString::number(term3, 'g', 17)
-                    //         << "\nterm4    =" << QString::number(term4, 'g', 17)
-                    //         << "\nsum12    =" << QString::number(sum12, 'g', 17)
-                    //         << "\nsum123   =" << QString::number(sum123, 'g', 17)
-                    //         << "\nsum1234  =" << QString::number(sum1234, 'g', 17)
-                    //         << "\nweighted =" << QString::number(weighted, 'g', 17);
-                    // }
-                    // ===== DEBUG END =====
-
-                    y[0][om] += (-y[0][r-1] + weightValues.value("s12",0.0)*tanhFunction(y[1][r-1])
-                                 + weightValues.value("s13",0.0)*sinEFunction(y[2][r-1])
-                                 + weightValues.value("s14",0.0)*sinEFunction(y[3][r-1])) * bg;
-
-                    y[1][om] += (-y[1][r-1] + weightValues.value("s21",0.0)*sinEFunction(y[0][r-1])
-                                 + weightValues.value("s23",0.0)*sinEFunction(y[2][r-1])
-                                 + weightValues.value("s25",0.0)*sinEFunction(y[4][r-1])) * bg;
-
-                    // ① Way of how  expression is evaluted in   compiler
-                    //     if (om == 1 && r == 1) {
-                    //     qDebug().noquote()
-                    //     << "QT_AFTER_ACCUM ="
-                    //     << QString::number(y[1][om], 'g', 17);
-                    // }
-                    //Done
-
-                    y[2][om] += (-y[2][r-1] + weightValues.value("s31",0.0)*tanhFunction(y[0][r-1])
-                                 + weightValues.value("s32",0.0)*tanhFunction(y[1][r-1])
-                                 + weightValues.value("s33",0.0)*sinEFunction(y[2][r-1])) * bg;
-
-                    // double gate4Term;
-                    // if (gateNode4.enabled) {
-                    //     const double G2 = evalGateForNode(3, y[3][r-1]);
-                    //     gate4Term = G2 * tanhFunction(y[3][r-1]);
-                    // } else {
-                    //     gate4Term = (alpha2 - alpha3*sinEFunction(y[4][r-1])) * tanhFunction(y[3][r-1]);
-                    // }
-                    // y[3][om] += (-y[3][r-1] + weightValues.value("s41",0.0)*tanhFunction(y[0][r-1]) + gate4Term) * bg;
-
-                    // double gate5Term;
-                    // if (gateNode5.enabled) {
-                    //     const double G1 = evalGateForNode(4, y[4][r-1]);
-                    //     gate5Term = G1 * tanhFunction(y[4][r-1]);
-                    // } else {
-                    //     gate5Term = (1.0 - alpha1*tanhFunction(y[2][r-1])) * tanhFunction(y[4][r-1]);
-                    // }
-                    // y[4][om] += (-y[4][r-1] + weightValues.value("s52",0.0)*tanhFunction(y[1][r-1]) + gate5Term) * bg;
-                    double gate4Term =
-                        (params.alpha2 - params.alpha3 * sinEFunction(y[4][r-1]))
-                        * tanhFunction(y[3][r-1]);
-
-                    y[3][om] += (-y[3][r-1]
-                                 + weightValues.value("s41",0.0) * tanhFunction(y[0][r-1])
-                                 + gate4Term) * bg;
-
-                    double gate5Term =
-                        (1.0 - params.alpha1 * tanhFunction(y[2][r-1]))
-                        * tanhFunction(y[4][r-1]);
-
-                    y[4][om] += (-y[4][r-1]
-                                 + weightValues.value("s52",0.0) * tanhFunction(y[1][r-1])
-                                 + gate5Term) * bg;
-                }
-
-                for (int i = 0; i < 5; ++i)
-                    y[i][om] += y[i][0];
-
-                // ===== DEBUG START =====
-
-                // if (om == 1) {
-                //     qDebug().noquote()
-                //     << "QT_AFTER_INITIAL ="
-                //     << QString::number(y[1][om], 'g', 17);
-                // }
-
-                // ===== DEBUG END =====
-
-                if (om % sampleStride == 0 || om == steps) {
-                    out3d << a2 << " " << om << " " << y[0][om] << " " << y[1][om] << " "
-                          << y[2][om] << " " << y[3][om] << " " << y[4][om] << "\n";
-                }
-            }
+            y = solver.runODE(solverConnections, weightValues);
+        } else {
+            y = solver.runGamma(buttons.size(),
+                                solverConnections,
+                                weightValues);
         }
 
-        for (int t = transientStart; t <= steps; t += sampleStride) {
+        for (int t = sampleStride; t <= steps; t += sampleStride) {
+            out3d << a2 << " " << t << " "
+                  << y[0][t] << " "
+                  << y[1][t] << " "
+                  << y[2][t] << " "
+                  << y[3][t] << " "
+                  << y[4][t] << "\n";
+        }
+
+        if (steps % sampleStride != 0) {
+            out3d << a2 << " " << steps << " "
+                  << y[0][steps] << " "
+                  << y[1][steps] << " "
+                  << y[2][steps] << " "
+                  << y[3][steps] << " "
+                  << y[4][steps] << "\n";
+        }
+
+        for (int t = transientStart;
+             t <= steps;
+             t += sampleStride) {
+
             out2d << a2 << " "
-                  << y[0][t] << " " << y[1][t] << " " << y[2][t] << " "
-                  << y[3][t] << " " << y[4][t] << "\n";
+                  << y[0][t] << " "
+                  << y[1][t] << " "
+                  << y[2][t] << " "
+                  << y[3][t] << " "
+                  << y[4][t] << "\n";
         }
 
         params.alpha2 = oldAlpha2;
+
         out3d << "\n";
         out2d << "\n";
     }

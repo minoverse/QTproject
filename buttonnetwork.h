@@ -13,7 +13,8 @@
 #include <QPointF>
 
 #include "model/fivenodeparameters.h"
-
+#include "model/fivenodemodel.h"
+#include "solver/solver.h"
 
 struct Connection {
     QPushButton* start = nullptr;
@@ -62,10 +63,6 @@ private:
     QString buildTerm(const QString& from, const QString& to,
                       const QString& function, double val);
 
-    // Gate helpers
-    double baseValueFromType(const QString& baseType, double baseConst) const;
-    double applyFn(const QString& fn, double x) const;
-    double evalGateForNode(int nodeIndex, double yValue) const;
 
     // Save / run folder
     bool ensureBaseResultDir();
@@ -75,12 +72,6 @@ private:
     void saveParams(const QString& path);
 
     // Solver core
-    static double sinEFunction(double x);
-    static double tanhFunction(double x);
-    static double reluFunction(double x);
-    double gammaWeight(int om, int r, double nu);
-    void runODE();
-    void runGamma();
     void saveAndDisplayResult(const QVector<QVector<double>>& y, int steps);
 
     // Table display
@@ -116,6 +107,8 @@ private:
 
     // Five-node simulation parameters
     FiveNodeParameters params;
+    FiveNodeModel model;
+    Solver solver;
     // Alpha2 scan settings
     double scanAlpha2Min = -10.0;
     double scanAlpha2Max =  10.0;
