@@ -7,31 +7,6 @@ This project is a **Qt-based GUI tool** for building and simulating **Hopfield n
 - Fractional-order (Gamma-based) solver
 
 Users can visually design a 5-node network, assign activation functions (sin, tanh, ReLU), set custom weights, and run the simulation with real-time output.
-## 📸 Demo / Screenshots
-
-### Network Design & Simulation GUI
-<p align="center">
-  <img src="docs/Screenshot_20260120_100149_Gallery.jpg" width="700"/>
-</p>
-
-### Simulation Output & Plot
-<p align="center">
-  <img src="docs/Screenshot_20260120_100142_Gallery.jpg" width="700"/>
-</p>
-
----
-
-##  Features
-
--  **5-node network** (y₁ to y₅)
--  **Visual GUI node editor**
--  **Custom activation function per connection** (sin, tanh, relu)
--  **Choose solver:** ODE or Fractional (Gamma)
--  **Live output on right panel**
--  **Graph plotting** with Gnuplot
--  **Export equations** and **result table**
-
----
 
 
 # ButtonNetwork
@@ -656,6 +631,33 @@ Parameters
 Five-node equations
         ↓
 Gamma/BG calculation
+
+## 📸 Demo / Screenshots
+
+### Network Design & Simulation GUI
+<p align="center">
+  <img src="docs/Screenshot_20260120_100149_Gallery.jpg" width="700"/>
+</p>
+
+### Simulation Output & Plot
+<p align="center">
+  <img src="docs/Screenshot_20260120_100142_Gallery.jpg" width="700"/>
+</p>
+
+---
+
+##  Features
+
+-  **5-node network** (y₁ to y₅)
+-  **Visual GUI node editor**
+-  **Custom activation function per connection** (sin, tanh, relu)
+-  **Choose solver:** ODE or Fractional (Gamma)
+-  **Live output on right panel**
+-  **Graph plotting** with Gnuplot
+-  **Export equations** and **result table**
+
+---
+
         ↓
 Numerical result
         ↓
