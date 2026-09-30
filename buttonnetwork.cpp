@@ -1,4 +1,6 @@
 #include "buttonnetwork.h"
+#include "output/resultwriter.h"
+#include "validation/validationrunner.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -370,53 +372,14 @@ void ButtonNetwork::computeResults()
 
 void ButtonNetwork::saveAndDisplayResult(const QVector<QVector<double>>& y, int steps)
 {
-    QFile f(runPath("result.dat"));
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QMessageBox::critical(this, "Error", "Cannot write result.dat");
+    if (!ResultWriter::writeResults(currentRunDir, y, steps)) {
+        QMessageBox::critical(this, "Error", "Cannot write result files");
         return;
-    }
-
-    QTextStream out(&f);
-    // for debug
-    out.setRealNumberNotation(QTextStream::ScientificNotation);
-    out.setRealNumberPrecision(17);
-    for (int t = 0; t <= steps; ++t) {
-        out << y[0][t] << " " << y[1][t] << " " << y[2][t] << " " << y[3][t] << " " << y[4][t] << "\n";
-    }
-    f.close();
-
-    QFile stream(runPath("result_stream.csv"));
-    if (stream.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QTextStream s(&stream);
-        s << "t,y1,y2,y3,y4,y5\n";
-        for (int t = 0; t <= steps; ++t) {
-            s << t << "," << y[0][t] << "," << y[1][t] << "," << y[2][t] << "," << y[3][t] << "," << y[4][t] << "\n";
-        }
-        stream.close();
-    }
-
-    QFile fin(runPath("result_final.csv"));
-    if (fin.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QTextStream s(&fin);
-        s << "y1,y2,y3,y4,y5\n";
-        s << y[0][steps] << "," << y[1][steps] << "," << y[2][steps] << "," << y[3][steps] << "," << y[4][steps] << "\n";
-        fin.close();
-    }
-
-    QFile table(runPath("table.txt"));
-    if (table.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QTextStream t(&table);
-        t << "Output Table (result.dat)\n";
-        t << "Rows: " << (steps + 1) << "\n\n";
-        t << "y1 y2 y3 y4 y5\n";
-        for (int i = 0; i <= steps; ++i) {
-            t << y[0][i] << " " << y[1][i] << " " << y[2][i] << " " << y[3][i] << " " << y[4][i] << "\n";
-        }
-        table.close();
     }
 
     emit fileSaved(runPath("result.dat"));
 }
+
 
 // ================= UI helpers =================
 
@@ -998,27 +961,15 @@ void ButtonNetwork::runAutoTestNode5Preset()
     // nu = 0.70;
     // tMax = 5000;
     // solverMode = "GAMMA";
-    params.alpha2 = userAlpha2;
-    params.alpha1 = -2.2;
-    params.alpha3 = 1.2;
-    params.nu = 0.70;
+    ValidationRunner::configureFiveNodePreset(params, userAlpha2);
 
-    params.tMax = 1000;
-    params.solverMode = "GAMMA";
     ensurePresetNodes5();
     connections.clear();
     weightValues.clear();
-    addOrUpdateConnection(1, 4, -0.6, "sin_exp");
-    addOrUpdateConnection(4, 1,  0.7, "tanh");
-    addOrUpdateConnection(1, 3, -0.8, "sin_exp");
-    addOrUpdateConnection(3, 1,  1.7, "tanh");
-    addOrUpdateConnection(2, 3,  2.0, "sin_exp");//?
-    addOrUpdateConnection(3, 2, -0.4, "tanh");
-    addOrUpdateConnection(1, 2, -0.3, "tanh");
-    addOrUpdateConnection(2, 1, -3.0, "sin_exp");
-    addOrUpdateConnection(2, 5,  0.4, "sin_exp");
-    addOrUpdateConnection(5, 2,  1.7, "tanh");
-    addOrUpdateConnection(3, 3, 3.0, "sin_exp"); // s33
+
+    for (const auto& c : ValidationRunner::fiveNodeConnections()) {
+        addOrUpdateConnection(c.from, c.to, c.weight, c.function);
+    }
 
     if (equationEditor) {
         equationEditor->append(QString("\n[AUTO TEST] alpha2 = %1, nu = %2\n")

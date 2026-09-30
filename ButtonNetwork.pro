@@ -10,12 +10,16 @@ SOURCES += \
     buttonnetwork.cpp \
     model/fivenodeparameters.cpp \
     model/fivenodemodel.cpp \
-    solver/solver.cpp
+    solver/solver.cpp \
+    output/resultwriter.cpp \
+    validation/validationrunner.cpp
 
 HEADERS += \
     buttonnetwork.h \
     model/fivenodeparameters.h \
     model/fivenodemodel.h \
-    solver/solver.h
+    solver/solver.h \
+    output/resultwriter.h \
+    validation/validationrunner.h
 
 LIBS += -lgsl -lgslcblas -lm
