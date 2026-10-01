@@ -1,88 +1,76 @@
-# QTproject
-## Hopfield Fractional Network Simulator (Qt GUI)
+# Hopfield Fractional Network Simulator
 
-This project is a **Qt-based GUI tool** for building and simulating **Hopfield neural networks** using:
+A Qt-based GUI application for building, simulating, analyzing, and validating
+a five-node Hopfield neural network.
 
-- Ordinary Differential Equation (ODE) solver  
-- Fractional-order (Gamma-based) solver
+The project supports:
 
-Users can visually design a 5-node network, assign activation functions (sin, tanh, ReLU), set custom weights, and run the simulation with real-time output.
-
-
-## Architecture
-
-The project is separated into independent components for GUI handling,
-five-node model definition, numerical solvers, validation, result output,
-and plotting.
-
-This separation makes the numerical implementation easier to inspect and
-debug independently from the GUI.
-
-### Refactoring Note
-
-The refactoring preserves the existing numerical implementation, including
-the equations, parameters, Gamma/ODE calculations, and calculation order.
-Numerical behavior is validated against the original implementation after
-each major separation step.
+- Ordinary Differential Equation (ODE) solver
+- Fractional-order Gamma-based solver
+- Interactive five-node network configuration
+- Custom connection weights and activation functions
+- Alpha2 parameter scanning
+- Numerical validation against the original C reference implementation
+- Result export and Gnuplot visualization
 
 ---
 
 # Architecture
 
+The project is separated into independent components for GUI handling,
+mathematical model definition, numerical computation, parameter analysis,
+validation, result output, and plotting.
+
 ```text
-                         ┌─────────────────────┐
-                         │        GUI          │
-                         │    ButtonNetwork    │
-                         │                     │
-                         │ buttons / dialogs   │
-                         │ network drawing     │
-                         └──────────┬──────────┘
-                                    │
-                     ┌──────────────┴──────────────┐
-                     │                             │
-              normal simulation             validation request
-                     │                             │
-                     ▼                             ▼
-          ┌────────────────────┐       ┌─────────────────────┐
-          │ FiveNodeParameters │◄──────│  ValidationRunner   │
-          │                    │       │                     │
-          │ alpha1/alpha2/     │       │ reference setup     │
-          │ alpha3/nu          │       │ reference weights   │
-          │ coefficients       │       │ validation workflow │
-          │ initial values     │       └──────────┬──────────┘
-          └─────────┬──────────┘                  │
-                    │                             │
-                    ▼                             │
-          ┌────────────────────┐                  │
-          │   FiveNodeModel    │◄─────────────────┘
-          │                    │
-          │ 5-node equations   │
-          │ activation/gates   │
-          └─────────┬──────────┘
-                    │
-                    ▼
-          ┌────────────────────┐
-          │       Solver       │
-          │                    │
-          │ Gamma calculation  │
-          │ ODE calculation    │
-          │ BG/Gamma weights   │
-          └─────────┬──────────┘
-                    │
-              SimulationResult
-                    │
-          ┌─────────┴─────────────┐
-          │                       │
-          ▼                       ▼
- ┌──────────────────┐    ┌────────────────────┐
- │   ResultWriter   │    │    PlotManager     │
- │                  │    │                    │
- │ .dat             │    │ individual plots   │
- │ .csv             │    │ five-node plots    │
- │ tables           │    │ reference-style    │
- │ run information  │    │ plots / scans      │
- └──────────────────┘    └────────────────────┘
+                    ┌────────────────────────┐
+                    │     ButtonNetwork      │
+                    │                        │
+                    │ GUI / orchestration    │
+                    │ network editing        │
+                    │ user interaction       │
+                    └───────────┬────────────┘
+                                │
+          ┌─────────────────────┼─────────────────────┐
+          │                     │                     │
+          ▼                     ▼                     ▼
+┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
+│ FiveNodeParameters│  │  FiveNodeModel   │  │  Alpha2Scanner   │
+│                  │  │                  │  │                  │
+│ simulation       │  │ mathematical     │  │ parameter sweep  │
+│ parameters       │  │ equations        │  │ scan data        │
+└────────┬─────────┘  └────────┬─────────┘  └────────┬─────────┘
+         │                     │                     │
+         └─────────────┬───────┘                     │
+                       ▼                             │
+              ┌──────────────────┐                   │
+              │      Solver      │◄──────────────────┘
+              │                  │
+              │ ODE solver       │
+              │ Gamma solver     │
+              │ Gamma/BG weights │
+              └────────┬─────────┘
+                       │
+                       ▼
+                Numerical Results
+                       │
+          ┌────────────┼─────────────┐
+          │            │             │
+          ▼            ▼             ▼
+┌──────────────┐ ┌──────────────┐ ┌──────────────────┐
+│ ResultWriter │ │ PlotManager  │ │ ValidationRunner │
+│              │ │              │ │                  │
+│ DAT / CSV    │ │ Gnuplot      │ │ C-reference      │
+│ tables       │ │ PNG output   │ │ comparison       │
+└──────────────┘ └──────────────┘ └──────────────────┘
 ```
+
+The main goal of this separation is to keep the numerical implementation
+independent from GUI, plotting, and file-output responsibilities.
+
+The refactoring preserves the existing numerical equations, parameters,
+Gamma/ODE calculations, Gamma-weight calculation, and calculation order.
+
+Numerical behavior is checked against the original C implementation.
 
 ---
 
@@ -92,12 +80,10 @@ each major separation step.
 ButtonNetwork/
 │
 ├── main.cpp
+├── buttonnetwork.cpp
+├── buttonnetwork.h
 ├── ButtonNetwork.pro
 ├── README.md
-│
-├── gui/
-│   ├── buttonnetwork.h
-│   └── buttonnetwork.cpp
 │
 ├── model/
 │   ├── fivenodeparameters.h
@@ -109,9 +95,19 @@ ButtonNetwork/
 │   ├── solver.h
 │   └── solver.cpp
 │
+├── analysis/
+│   ├── alpha2scanner.h
+│   └── alpha2scanner.cpp
+│
 ├── validation/
+│   ├── main_validation.cpp
 │   ├── validationrunner.h
-│   └── validationrunner.cpp
+│   ├── validationrunner.cpp
+│   └── reference/
+│       ├── result_a2_0.000000.dat
+│       ├── result_a2_1.000000.dat
+│       ├── result_a2_2.000000.dat
+│       └── result_a2_3.000000.dat
 │
 ├── output/
 │   ├── resultwriter.h
@@ -126,159 +122,245 @@ ButtonNetwork/
 
 # Component Responsibilities
 
-## 1. GUI — `gui/ButtonNetwork`
+## 1. GUI / Orchestration — `ButtonNetwork`
 
-`ButtonNetwork` is responsible only for user interaction and network visualization.
+`ButtonNetwork` handles user interaction and coordinates the separated
+simulation components.
 
-Responsibilities:
+Main responsibilities:
 
-- create/edit network nodes
-- create/edit connections
-- mouse handling
-- network drawing
-- dialogs
-- GUI controls
-- collect user input
-- request simulations
-- display simulation status/results
+- create and edit network nodes
+- create and edit connections
+- handle mouse interaction
+- draw the network
+- collect GUI parameters
+- request numerical simulations
+- display results
+- request Alpha2 scans
+- request plotting
+- start validation/demo workflows
 
-The GUI should not contain the numerical Gamma or ODE implementation.
+The numerical Gamma and ODE algorithms are not implemented in the GUI.
 
 ```text
 User
-  ↓
+  │
+  ▼
 ButtonNetwork
-  ↓
-parameters / simulation request
-  ↓
-model + solver
+  │
+  ├── parameters
+  ├── connections
+  └── simulation request
+          │
+          ▼
+     Model + Solver
 ```
+
+This keeps GUI-specific behavior separate from the numerical implementation.
 
 ---
 
 ## 2. Parameters — `model/FiveNodeParameters`
 
-Contains the numerical parameters required by the five-node model.
+`FiveNodeParameters` stores the numerical configuration of the five-node
+system.
 
-Examples:
+The main parameters include:
 
 ```text
 alpha1
 alpha2
 alpha3
 nu
-
-initial conditions
-
-y1(0)
-y2(0)
-y3(0)
-y4(0)
-y5(0)
-
-coefficient/weight table
-
-s12
-s13
-...
-s52
+tMax
+solverMode
 ```
 
-This separation makes it possible to check model parameters independently from the equations and solver.
+It also contains configuration for the node-specific gate functions.
 
-When debugging:
+For example:
 
 ```text
-Are the coefficients correct?
-        ↓
-FiveNodeParameters
+GateNode4
+GateNode5
 ```
+
+Separating the parameters from the solver makes it easier to determine
+whether a discrepancy originates from the simulation configuration or from
+the numerical algorithm itself.
 
 ---
 
 ## 3. Mathematical Model — `model/FiveNodeModel`
 
-Contains the mathematical definition of the five-node system.
+`FiveNodeModel` contains the mathematical definition of the five-node
+network.
 
-Responsibilities:
+Responsibilities include:
 
-- five-node equations
-- activation functions required by the model
-- node-specific gate functions
-- evaluation of the mathematical model
+- evaluation of the five-node equations
+- activation functions
+- connection-dependent function evaluation
+- node-specific gate behavior
+- mathematical right-hand-side evaluation
 
-It should describe **what is being calculated**, not how the numerical solver iterates over time.
-
-When debugging:
+Conceptually:
 
 ```text
-Are the equations correct?
-        ↓
-FiveNodeModel
+state + parameters + weights
+             │
+             ▼
+      FiveNodeModel
+             │
+             ▼
+       model evaluation
 ```
 
-The model should not:
+The model describes **what mathematical system is evaluated**.
 
-- draw GUI elements
-- open dialogs
+It does not:
+
+- create GUI widgets
 - generate plots
 - write result files
+- implement the Gamma history accumulation loop
 
 ---
 
 ## 4. Numerical Solver — `solver/Solver`
 
-Contains the numerical algorithms.
+`Solver` contains the numerical algorithms used to evolve the five-node
+system.
 
-Responsibilities:
+Two solver modes are supported.
 
-### Gamma solver
+### ODE Solver
 
-- Gamma/Beta calculation
-- BG weight calculation
-- `om` loop
-- `r` loop
-- fractional accumulation
-- initial-value addition
-
-### ODE solver
-
-- existing ODE implementation
-- ODE integration
-
-Both solver modes are retained.
+The ODE path performs the existing ordinary differential equation
+integration.
 
 ```text
 FiveNodeModel
       │
-      ├─────────────┐
-      ▼             ▼
- Gamma Solver    ODE Solver
-      │             │
-      └──────┬──────┘
-             ▼
-      SimulationResult
+      ▼
+  ODE Solver
+      │
+      ▼
+Numerical trajectory
 ```
 
-The first refactoring must preserve the existing mathematical expressions and evaluation order as closely as possible.
+### Fractional Gamma Solver
 
-When debugging:
+The Gamma solver performs the fractional-order numerical calculation.
+
+Its responsibilities include:
+
+- Gamma/Beta-related weight calculation
+- BG/Gamma weight calculation
+- history accumulation
+- `om` iteration
+- `r` iteration
+- fractional contribution accumulation
+- initial-value contribution
+- time-step evolution
+
+The Gamma weight calculation is kept inside the solver:
+
+```cpp
+double gammaWeight(int om, int r, double nu) const;
+```
+
+Conceptually:
 
 ```text
-Are BG/Gamma or accumulation calculations correct?
-        ↓
-Solver
+                    previous states
+                          │
+                          ▼
+                   Gamma/BG weights
+                          │
+                          ▼
+                   history accumulation
+                          │
+                          ▼
+                   model evaluation
+                          │
+                          ▼
+                     next state
 ```
+
+This part is especially important because the Gamma/BG weighting and the
+order of the fractional accumulation directly affect the numerical result.
+
+The refactoring therefore keeps the numerical behavior of this calculation
+consistent with the reference implementation.
 
 ---
 
-## 5. Validation — `validation/ValidationRunner`
+# Alpha2 Parameter Analysis
 
-This component contains the validation workflow currently represented by `runAutoTestNode5Preset()`.
+## `analysis/Alpha2Scanner`
 
-This is an important part of the project and is used to compare the Qt implementation with the reference C implementation.
+`Alpha2Scanner` performs the Alpha2 parameter-sweep calculation independently
+from the GUI.
 
-Responsibilities include the existing validation configuration, such as:
+Responsibilities:
+
+- iterate over the configured Alpha2 range
+- temporarily apply each Alpha2 value
+- invoke the selected numerical solver
+- discard the configured transient region
+- sample the resulting trajectories
+- generate 2D scan data
+- generate 3D scan data
+
+The generated files include:
+
+```text
+alpha2_scan_2d.dat
+alpha2_scan_3d.dat
+```
+
+Conceptually:
+
+```text
+Alpha2 range
+     │
+     ▼
+Alpha2Scanner
+     │
+     ├── alpha2 = a0 → Solver
+     ├── alpha2 = a1 → Solver
+     ├── alpha2 = a2 → Solver
+     └── ...
+             │
+             ▼
+       sampled states
+             │
+             ▼
+ alpha2_scan_2d.dat
+ alpha2_scan_3d.dat
+```
+
+`Alpha2Scanner` does not generate plots.
+
+After the scan data is generated, visualization is delegated to
+`PlotManager`.
+
+---
+
+# Validation
+
+## `validation/ValidationRunner`
+
+`ValidationRunner` defines the reference validation experiment.
+
+The validation uses the same `FiveNodeModel` and `Solver` used by the normal
+application.
+
+It does **not** contain a second independent implementation of the Gamma
+solver.
+
+The reference preset uses:
 
 ```text
 alpha1 = -2.2
@@ -286,100 +368,173 @@ alpha2 = selected validation value
 alpha3 = 1.2
 nu     = 0.70
 
-steps  = 1000
+tMax   = 1000
 solver = GAMMA
 ```
 
-and the reference five-node coefficients used by the current validation workflow.
-
-Typical validation values include:
+The reference network connections are:
 
 ```text
-alpha2 = 0
-alpha2 = 1
-alpha2 = 2
-alpha2 = 3
-alpha2 = 6
+1 -> 4   -0.6   sin_exp
+4 -> 1    0.7   tanh
+
+1 -> 3   -0.8   sin_exp
+3 -> 1    1.7   tanh
+
+2 -> 3    2.0   sin_exp
+3 -> 2   -0.4   tanh
+
+1 -> 2   -0.3   tanh
+2 -> 1   -3.0   sin_exp
+
+2 -> 5    0.4   sin_exp
+5 -> 2    1.7   tanh
+
+3 -> 3    3.0   sin_exp
 ```
 
-Conceptually:
+The validation workflow is:
 
 ```text
-ValidationRunner
-       │
-       │ validation parameters
-       ▼
+Reference parameters
+        │
+        ▼
 FiveNodeParameters
-       │
-       ▼
+        │
+        ▼
 FiveNodeModel
-       │
-       ▼
-Solver
-       │
-       ▼
-SimulationResult
-```
-
-`ValidationRunner` defines the validation experiment.
-
-It should **not implement a second independent copy of the Gamma solver**.
-
-This ensures that normal simulation and reference validation can use the same numerical implementation.
-
-When debugging:
-
-```text
-Are the reference validation conditions correct?
-        ↓
+        │
+        ▼
+     Solver
+        │
+        ▼
+Qt numerical trajectory
+        │
+        ▼
 ValidationRunner
+        │
+        ├─────────────── reference .dat
+        │
+        ▼
+high-precision comparison
 ```
+
+This makes it possible to test the production numerical implementation
+directly instead of maintaining a separate validation solver.
 
 ---
 
-## 6. Result Output — `output/ResultWriter`
+# Numerical Validation Results
 
-Responsible only for saving calculated results.
+The refactored Gamma solver was compared against output generated by the
+original C reference implementation.
 
-Examples:
+Four Alpha2 cases are currently included in the automated validation:
+
+| Alpha2 | Samples | Nodes | Result |
+|-------:|--------:|------:|:------:|
+| 0.0 | 1001 | 5 | PASS |
+| 1.0 | 1001 | 5 | PASS |
+| 2.0 | 1001 | 5 | PASS |
+| 3.0 | 1001 | 5 | PASS |
+
+Validation output:
+
+```text
+=== Numerical Validation ===
+
+alpha2 = 0.0 : PASS
+   Exact match: 1001 rows x 5 nodes
+
+alpha2 = 1.0 : PASS
+   Exact match: 1001 rows x 5 nodes
+
+alpha2 = 2.0 : PASS
+   Exact match: 1001 rows x 5 nodes
+
+alpha2 = 3.0 : PASS
+   Exact match: 1001 rows x 5 nodes
+
+Overall: PASS
+```
+
+For these four validation cases, the refactored Qt Gamma implementation
+produces the same numerical trajectory as the generated C-reference data.
+
+This validation is particularly important for confirming that separation of:
+
+```text
+model
+solver
+validation
+output
+plotting
+analysis
+GUI
+```
+
+did not alter the Gamma solver calculation.
+
+---
+
+# Result Output
+
+## `output/ResultWriter`
+
+`ResultWriter` handles persistence of already calculated numerical results.
+
+Typical output files include:
 
 ```text
 result.dat
 result_stream.csv
 result_final.csv
 table.txt
-parameter/run information
+params.txt
+run_info.txt
 ```
 
-Data flow:
+For a normal simulation:
 
 ```text
 Solver
    │
    ▼
-SimulationResult
+Numerical trajectory
    │
    ▼
 ResultWriter
    │
-   ├── DAT
-   ├── CSV
-   └── table
+   ├── result.dat
+   ├── result_stream.csv
+   ├── result_final.csv
+   └── table.txt
 ```
 
-`ResultWriter` must not perform numerical simulation.
+`ResultWriter` does not calculate the network dynamics.
 
 ---
 
-## 7. Plotting — `plot/PlotManager`
+# Plotting
 
-Responsible only for visualization of already calculated results.
+## `plot/PlotManager`
 
-The plotting component should support multiple output styles instead of forcing all results into one combined figure.
+`PlotManager` is responsible for visualization of already calculated data.
 
-Planned plotting modes include:
+It creates Gnuplot scripts and executes Gnuplot independently from the
+numerical solver.
 
-### Individual state plots
+### Time-series plots
+
+A simulation generates a combined plot:
+
+```text
+y_all.png
+```
+
+containing all five state trajectories.
+
+It also generates separate plots:
 
 ```text
 y1.png
@@ -389,151 +544,189 @@ y4.png
 y5.png
 ```
 
-### Combined five-node plot
+This allows each state trajectory to be inspected independently while
+retaining the combined five-node visualization.
+
+### Alpha2 scan plots
+
+Alpha2 scanning generates:
 
 ```text
-y_all.png
+alpha2_y1.png
+alpha2_y2.png
+alpha2_y3.png
+alpha2_y4.png
+alpha2_y5.png
 ```
 
-### Validation/reference-style plots
+using the data produced by `Alpha2Scanner`.
 
-For example:
+The separation is:
 
 ```text
-alpha2_0.png
-alpha2_1.png
-alpha2_2.png
-alpha2_3.png
-alpha2_6.png
+Alpha2Scanner
+      │
+      ▼
+scan .dat files
+      │
+      ▼
+ PlotManager
+      │
+      ▼
+scan PNG files
 ```
 
-These plots can be formatted to reproduce the style used in the reference figures for direct comparison.
-
-### Point / parameter-scan plots
-
-The existing alpha2 scan and point-based visualization should also be handled by the plotting component.
-
-Conceptually:
-
-```text
-SimulationResult
-       │
-       ▼
-   PlotManager
-       │
-       ├── individual node plot
-       ├── five-node plot
-       ├── alpha2/reference plot
-       └── point/scan plot
-```
-
-`PlotManager` must not calculate the network dynamics.
+`PlotManager` does not calculate network dynamics.
 
 ---
+
+
 
 # Debugging Separation
 
-The separated architecture makes it easier to identify the source of a numerical discrepancy.
+The architecture is designed so that different classes correspond to
+different categories of problems.
 
 ```text
-Problem                         Component
-------------------------------------------------
-Parameters / coefficients    → FiveNodeParameters
-Five-node equations          → FiveNodeModel
-Gamma / BG / accumulation    → Solver
-ODE calculation              → Solver
-Validation configuration     → ValidationRunner
-Saved numerical output       → ResultWriter
-Visualization                → PlotManager
-GUI parameter transfer       → ButtonNetwork
+Problem                              Component
+---------------------------------------------------------
+Simulation parameters              FiveNodeParameters
+Five-node equations                FiveNodeModel
+Gamma/BG weights                   Solver
+Fractional accumulation            Solver
+ODE calculation                    Solver
+Alpha2 parameter sweep             Alpha2Scanner
+Reference validation conditions    ValidationRunner
+Saved numerical output             ResultWriter
+Visualization / Gnuplot            PlotManager
+GUI parameter transfer             ButtonNetwork
 ```
 
-This separation is particularly useful for the current comparison between the Qt implementation and the C reference implementation.
+For example, if a numerical discrepancy appears:
+
+```text
+Reference mismatch
+       │
+       ▼
+Are parameters identical?
+       │
+       ├── No  → FiveNodeParameters / ValidationRunner
+       │
+       ▼
+Are equations identical?
+       │
+       ├── No  → FiveNodeModel
+       │
+       ▼
+Are Gamma/BG weights identical?
+       │
+       ├── No  → Solver
+       │
+       ▼
+Is fractional accumulation identical?
+       │
+       ├── No  → Solver
+       │
+       ▼
+Check output precision / comparison
+```
+
+This separation is particularly useful when comparing the Qt implementation
+against the original C implementation.
 
 ---
 
-# Refactoring Strategy
 
-The existing implementation is separated incrementally without intentionally changing the numerical behavior.
 
-```text
-FiveNodeParameters
-        ↓
-FiveNodeModel
-        ↓
-Solver (Gamma / ODE)
-        ↓
-ValidationRunner
-        ↓
-ResultWriter
-        ↓
-PlotManager
-        ↓
-ButtonNetwork (GUI)
+# Building
+
+The project uses Qt 6, qmake, GSL, and Gnuplot.
+
+Typical Ubuntu/Debian dependencies include:
+
+```bash
+sudo apt install qt6-base-dev libgsl-dev gnuplot
 ```
 
-After each major separation step, the numerical output is compared with the original implementation using high-precision output.
+Build the GUI application:
 
-```text
-Original result.dat
-        ↓
-17-digit comparison
-        ↓
-Refactored result.dat
+```bash
+cd ~/ButtonNetwork
+
+qmake6 ButtonNetwork.pro
+make -j$(nproc)
 ```
 
-After numerical equivalence is confirmed, the GUI and calculation can be connected using Qt signals/slots and moved to a worker thread.
+Run:
+
+```bash
+./ButtonNetwork
+```
 
 ---
 
-# Current Validation
+# Numerical Validation Build
 
-The current validation compares the Qt Gamma implementation with the C reference implementation.
+The standalone validation executable can be built independently from the
+GUI.
 
-The main focus is the numerical behavior for different `alpha2` values, especially `alpha2 = 3`.
+For example:
 
-```text
-Validation configuration
-        ↓
-FiveNodeParameters
-        ↓
-FiveNodeModel
-        ↓
-Gamma Solver
-        ↓
-SimulationResult
-        ↓
-ResultWriter / PlotManager
+```bash
+cd validation/build
+make -j$(nproc)
+
+cd ../..
+./validation/build/validate_solver
 ```
 
-This structure allows the model parameters, equations, numerical solver, output, and visualization to be inspected independently.
+Expected result:
 
----
+```text
+=== Numerical Validation ===
 
-# Demo / Screenshots
+alpha2 = 0.0 : PASS
+   Exact match: 1001 rows x 5 nodes
 
-## Network Design & Simulation GUI
+alpha2 = 1.0 : PASS
+   Exact match: 1001 rows x 5 nodes
 
-<p align="center">
-  <img src="docs/Screenshot_20260120_100149_Gallery.jpg" width="700"/>
-</p>
+alpha2 = 2.0 : PASS
+   Exact match: 1001 rows x 5 nodes
 
-## Simulation Output & Plot
+alpha2 = 3.0 : PASS
+   Exact match: 1001 rows x 5 nodes
 
-<p align="center">
-  <img src="docs/Screenshot_20260120_100142_Gallery.jpg" width="700"/>
-</p>
+Overall: PASS
+```
+
+A non-zero validation exit code indicates that at least one comparison
+failed.
 
 ---
 
 # Features
 
-- 5-node network (`y₁` to `y₅`)
-- Visual GUI node editor
-- Custom activation function per connection (`sin`, `tanh`, `relu`)
-- ODE and fractional Gamma solvers
-- C-reference numerical validation
+- Five-node Hopfield network
+- Qt graphical network editor
+- Editable weighted connections
+- Connection-dependent activation functions
+- Ordinary differential equation solver
+- Fractional Gamma-based solver
+- Gamma/BG history weighting
 - Alpha2 parameter scanning
-- Result/table display in the GUI
-- Result export (`.dat`, `.csv`)
-- Gnuplot visualization
+- Standalone numerical validation
+- C-reference comparison
+- High-precision result comparison
+- DAT output
+- CSV output
+- table output
+- combined five-node plots
+- individual `y1`–`y5` plots
+- individual Alpha2 scan plots
+- per-run result directories
+
+
+This provides a reproducible check that the current Gamma solver remains
+consistent with the original C reference implementation for the validated
+parameter sets.
