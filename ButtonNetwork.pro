@@ -12,7 +12,9 @@ SOURCES += \
     model/fivenodemodel.cpp \
     solver/solver.cpp \
     output/resultwriter.cpp \
-    validation/validationrunner.cpp
+    validation/validationrunner.cpp \
+    plot/plotmanager.cpp \
+    analysis/alpha2scanner.cpp
 
 HEADERS += \
     buttonnetwork.h \
@@ -20,6 +22,8 @@ HEADERS += \
     model/fivenodemodel.h \
     solver/solver.h \
     output/resultwriter.h \
-    validation/validationrunner.h
+    validation/validationrunner.h \
+    plot/plotmanager.h \
+    analysis/alpha2scanner.h
 
 LIBS += -lgsl -lgslcblas -lm

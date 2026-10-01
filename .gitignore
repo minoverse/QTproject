@@ -1,0 +1,39 @@
+# Build directories
+build/
+validation/build/
+
+# Compiled objects
+*.o
+*.obj
+
+# Executables
+ButtonNetwork
+validate_solver
+
+# qmake generated files
+Makefile
+.qmake.stash
+moc_*.cpp
+moc_*.h
+moc_predefs.h
+
+# Qt Creator
+*.user
+*.user.*
+CMakeLists.txt.user*
+
+# Backup / temporary files
+*.bak
+*.backup
+*~
+buttonnetwork.cpp.*
+buttonnetwork (Copy).cpp
+
+# Runtime / temporary logs
+timelog.txt
+
+# Generated result directories
+result/
+results/
+*.bak_*
+CMakeLists.txt

@@ -78,8 +78,6 @@ private:
     void showOutputTable();
 
     // gnuplot
-    void generateGnuplotScript();
-    void generateAlpha2ScanGnuplotScripts() const;
 
     // Alpha2 scan
     void scanAlpha2ReuseCurrentRun();

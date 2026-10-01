@@ -1,3 +1,5 @@
+#include "analysis/alpha2scanner.h"
+#include "plot/plotmanager.h"
 #include "buttonnetwork.h"
 #include "output/resultwriter.h"
 #include "validation/validationrunner.h"
@@ -438,75 +440,37 @@ void ButtonNetwork::clearNetwork()
 
 // ================= gnuplot: y_all =================
 
-void ButtonNetwork::generateGnuplotScript()
-{
-    if (currentRunDir.isEmpty()) return;
-
-    QFile script(runPath("plot.gnu"));
-    if (!script.open(QIODevice::WriteOnly | QIODevice::Text)) return;
-
-    QTextStream out(&script);
-
-    out << "set terminal pngcairo size 1200,900\n";
-    out << "set output 'y_all.png'\n";
-    out << "set multiplot layout 5,1 title 'Hopfield Network Results'\n";
-    out << "set grid\n";
-    out << "set key left\n";
-    out << "set xlabel 't (step)'\n";
-    out << "set xrange [0:*]\n";
-
-    out << "set ylabel 'y1'\n";
-    out << "plot 'result.dat' using 0:1 with lines linewidth 2 title 'y1'\n\n";
-    out << "set ylabel 'y2'\n";
-    out << "plot 'result.dat' using 0:2 with lines linewidth 2 title 'y2'\n\n";
-    out << "set ylabel 'y3'\n";
-    out << "plot 'result.dat' using 0:3 with lines linewidth 2 title 'y3'\n\n";
-    out << "set ylabel 'y4'\n";
-    out << "plot 'result.dat' using 0:4 with lines linewidth 2 title 'y4'\n\n";
-    out << "set ylabel 'y5'\n";
-    out << "plot 'result.dat' using 0:5 with lines linewidth 2 title 'y5'\n\n";
-
-    out << "unset multiplot\n";
-    out << "set output\n";
-
-    script.close();
-}
-
 void ButtonNetwork::showGraph()
 {
     if (currentRunDir.isEmpty()) {
-        QMessageBox::warning(this, "Error", "No run folder. Press Compute first.");
+        QMessageBox::warning(this, "Error",
+                             "No run folder. Press Compute first.");
         return;
     }
 
     QFile f(runPath("result.dat"));
     if (!f.exists()) {
         QMessageBox::warning(this, "Error",
-                             "No result.dat file found in run folder.\nRun Compute first.");
+                             "No result.dat file found in run folder.\n"
+                             "Run Compute first.");
         return;
     }
 
-    generateGnuplotScript();
+    const PlotResult result =
+        PlotManager::runTimeSeriesPlot(currentRunDir);
 
-    QProcess proc;
-    proc.setWorkingDirectory(currentRunDir);
-    proc.start("gnuplot", QStringList() << "plot.gnu");
-
-    if (!proc.waitForStarted()) {
-        QMessageBox::critical(this, "Error", "Failed to start gnuplot. Is it installed?");
-        return;
-    }
-
-    if (!proc.waitForFinished(-1) || proc.exitCode() != 0) {
+    if (!result.success) {
         QMessageBox::critical(this, "Error",
-                              "gnuplot failed. Check if pngcairo is available.");
+                              result.errorMessage);
         return;
     }
 
     emit fileSaved(runPath("y_all.png"));
 
 #ifdef Q_OS_LINUX
-    QProcess::startDetached("xdg-open", QStringList() << runPath("y_all.png"));
+    QProcess::startDetached(
+        "xdg-open",
+        QStringList() << runPath("y_all.png"));
 #endif
 }
 
@@ -523,48 +487,35 @@ void ButtonNetwork::scanAlpha2()
 void ButtonNetwork::scanAlpha2ReuseCurrentRun()
 {
     if (currentRunDir.isEmpty()) {
-        QMessageBox::warning(this, "Error", "No run folder. Press Compute first (or Auto Test).");
+        QMessageBox::warning(
+            this,
+            "Error",
+            "No run folder. Press Compute first (or Auto Test).");
         return;
     }
 
     double a2Min = scanAlpha2Min;
     double a2Max = scanAlpha2Max;
     double a2Step = scanAlpha2Step;
-    int transientPercent = scanTransientPercent;
-    int sampleStride = scanSampleStride;
 
     if (!(a2Step > 0.0) || a2Max < a2Min) {
         bool ok = true;
-        a2Min = QInputDialog::getDouble(this, "Alpha2 scan", "alpha2 min:", -10.0, -1000, 1000, 4, &ok);
+
+        a2Min = QInputDialog::getDouble(
+            this, "Alpha2 scan", "alpha2 min:",
+            -10.0, -1000, 1000, 4, &ok);
         if (!ok) return;
-        a2Max = QInputDialog::getDouble(this, "Alpha2 scan", "alpha2 max:",  10.0, -1000, 1000, 4, &ok);
+
+        a2Max = QInputDialog::getDouble(
+            this, "Alpha2 scan", "alpha2 max:",
+            10.0, -1000, 1000, 4, &ok);
         if (!ok) return;
-        a2Step = QInputDialog::getDouble(this, "Alpha2 scan", "alpha2 step:", 0.5, 0.0001, 1000, 4, &ok);
+
+        a2Step = QInputDialog::getDouble(
+            this, "Alpha2 scan", "alpha2 step:",
+            0.5, 0.0001, 1000, 4, &ok);
         if (!ok) return;
     }
-    if (transientPercent < 0 || transientPercent > 99) transientPercent = 70;
-    if (sampleStride < 1) sampleStride = 20;
-
-    QFile f3d(runPath("alpha2_scan_3d.dat"));
-    QFile f2d(runPath("alpha2_scan_2d.dat"));
-    if (!f3d.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QMessageBox::critical(this, "Error", "Cannot write alpha2_scan_3d.dat");
-        return;
-    }
-    if (!f2d.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QMessageBox::critical(this, "Error", "Cannot write alpha2_scan_2d.dat");
-        return;
-    }
-
-    QTextStream out3d(&f3d);
-    QTextStream out2d(&f2d);
-
-    const int steps = params.tMax;
-    const int transientStart =
-        std::min(std::max(
-            int(std::floor(steps * (transientPercent / 100.0))),
-            0),
-            steps);
 
     QVector<SolverConnection> solverConnections;
     solverConnections.reserve(connections.size());
@@ -574,133 +525,80 @@ void ButtonNetwork::scanAlpha2ReuseCurrentRun()
         sc.firstNode  = conn.start->text().toInt();
         sc.secondNode = conn.end->text().toInt();
         sc.function   = conn.function;
+
         solverConnections.append(sc);
     }
 
-    for (double a2 = a2Min;
-         a2 <= a2Max + 1e-12;
-         a2 += a2Step) {
+    Alpha2ScanConfig config;
+    config.min = a2Min;
+    config.max = a2Max;
+    config.step = a2Step;
+    config.transientPercent = scanTransientPercent;
+    config.sampleStride = scanSampleStride;
 
-        const double oldAlpha2 = params.alpha2;
-        params.alpha2 = a2;
+    const Alpha2ScanResult scanResult =
+        Alpha2Scanner::run(
+            currentRunDir,
+            solver,
+            params,
+            buttons.size(),
+            solverConnections,
+            weightValues,
+            config);
 
-        QVector<QVector<double>> y;
-
-        if (params.solverMode == "ODE") {
-            y = solver.runODE(solverConnections, weightValues);
-        } else {
-            y = solver.runGamma(buttons.size(),
-                                solverConnections,
-                                weightValues);
-        }
-
-        for (int t = sampleStride; t <= steps; t += sampleStride) {
-            out3d << a2 << " " << t << " "
-                  << y[0][t] << " "
-                  << y[1][t] << " "
-                  << y[2][t] << " "
-                  << y[3][t] << " "
-                  << y[4][t] << "\n";
-        }
-
-        if (steps % sampleStride != 0) {
-            out3d << a2 << " " << steps << " "
-                  << y[0][steps] << " "
-                  << y[1][steps] << " "
-                  << y[2][steps] << " "
-                  << y[3][steps] << " "
-                  << y[4][steps] << "\n";
-        }
-
-        for (int t = transientStart;
-             t <= steps;
-             t += sampleStride) {
-
-            out2d << a2 << " "
-                  << y[0][t] << " "
-                  << y[1][t] << " "
-                  << y[2][t] << " "
-                  << y[3][t] << " "
-                  << y[4][t] << "\n";
-        }
-
-        params.alpha2 = oldAlpha2;
-
-        out3d << "\n";
-        out2d << "\n";
-    }
-
-    f3d.close();
-    f2d.close();
-
-    generateAlpha2ScanGnuplotScripts();
-
-    QProcess proc;
-    proc.setWorkingDirectory(currentRunDir);
-    proc.start("gnuplot", QStringList() << "alpha2_scan.gnu");
-
-    if (!proc.waitForStarted()) {
-        QMessageBox::warning(this, "Gnuplot", "Failed to start gnuplot. Is it installed?");
+    if (!scanResult.success) {
+        QMessageBox::critical(
+            this,
+            "Alpha2 scan",
+            scanResult.errorMessage);
         return;
     }
 
-    const bool finished = proc.waitForFinished(-1);
-    const QString gpStdout = QString::fromLocal8Bit(proc.readAllStandardOutput());
-    const QString gpStderr = QString::fromLocal8Bit(proc.readAllStandardError());
+    const PlotResult plotResult =
+        PlotManager::runAlpha2ScanPlot(currentRunDir);
 
     QFile gpLog(runPath("alpha2_gnuplot_log.txt"));
+
     if (gpLog.open(QIODevice::WriteOnly | QIODevice::Text)) {
         QTextStream gl(&gpLog);
-        gl << "=== gnuplot stdout ===\n" << gpStdout << "\n\n";
-        gl << "=== gnuplot stderr ===\n" << gpStderr << "\n";
-        gpLog.close();
+
+        gl << "=== gnuplot stdout ===\n"
+           << plotResult.stdOut << "\n\n";
+
+        gl << "=== gnuplot stderr ===\n"
+           << plotResult.stdErr << "\n";
     }
 
     if (equationEditor) {
-        if (!gpStderr.trimmed().isEmpty()) equationEditor->append("\n[gnuplot stderr]\n" + gpStderr);
-        if (!gpStdout.trimmed().isEmpty()) equationEditor->append("\n[gnuplot stdout]\n" + gpStdout);
+        if (!plotResult.stdErr.trimmed().isEmpty()) {
+            equationEditor->append(
+                "\n[gnuplot stderr]\n" + plotResult.stdErr);
+        }
+
+        if (!plotResult.stdOut.trimmed().isEmpty()) {
+            equationEditor->append(
+                "\n[gnuplot stdout]\n" + plotResult.stdOut);
+        }
     }
 
-    if (!finished || proc.exitStatus() != QProcess::NormalExit || proc.exitCode() != 0) {
-        QMessageBox::warning(this, "Gnuplot",
-                             "alpha2 scan data saved, but gnuplot failed.\n"
-                             "See alpha2_gnuplot_log.txt in the run folder.");
+    if (!plotResult.success) {
+        QMessageBox::warning(
+            this,
+            "Gnuplot",
+            "alpha2 scan data saved, but gnuplot failed.\n"
+            + plotResult.errorMessage);
         return;
     }
 
-    emit fileSaved(runPath("alpha2_y1.png"));
-}
-
-void ButtonNetwork::generateAlpha2ScanGnuplotScripts() const
-{
-    if (currentRunDir.isEmpty()) return;
-
-    QFile script(runPath("alpha2_scan.gnu"));
-    if (!script.open(QIODevice::WriteOnly | QIODevice::Text)) return;
-
-    QTextStream g(&script);
-
-    g << "set term pngcairo size 900,700\n";
-    g << "set grid\n";
-    g << "set xlabel 'alpha2'\n";
-    g << "unset key\n";
-    g << "set pointsize 0.6\n";
-
-    const char* yNames[5] = {"y1","y2","y3","y4","y5"};
-    const int col2d[5] = {2,3,4,5,6};
-
-    for (int i = 0; i < 5; ++i) {
-        g << "set output 'alpha2_" << yNames[i] << ".png'\n";
-        g << "set ylabel '" << yNames[i] << "'\n";
-        g << "plot 'alpha2_scan_2d.dat' using 1:" << col2d[i]
-          << " with points pt 7 ps 0.4\n\n";
+    for (int i = 1; i <= 5; ++i) {
+        emit fileSaved(
+            runPath(QString("alpha2_y%1.png").arg(i)));
     }
-
-    g << "set output\n";
-    script.close();
 }
 
 // ================= Click-edit connections =================
+
+
 
 double ButtonNetwork::distancePointToSegment(const QPointF& p,
                                              const QPointF& a,
