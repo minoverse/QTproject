@@ -410,7 +410,15 @@ void ButtonNetwork::showOutputTable()
     f.close();
 }
 
-void ButtonNetwork::setSolverMode(const QString& mode) { params.solverMode = mode; }
+void ButtonNetwork::setSolverMode(const QString& mode)
+{
+    params.solverMode = mode;
+}
+
+void ButtonNetwork::setGraphStyle(const QString& style)
+{
+    graphStyle = style;
+}
 void ButtonNetwork::setTimeLimit(int t) { params.tMax = t; }
 void ButtonNetwork::setAlpha2ScanRange(double minVal, double maxVal, double stepVal)
 {
@@ -457,7 +465,7 @@ void ButtonNetwork::showGraph()
     }
 
     const PlotResult result =
-        PlotManager::runTimeSeriesPlot(currentRunDir);
+        PlotManager::runTimeSeriesPlot(currentRunDir, graphStyle);
 
     if (!result.success) {
         QMessageBox::critical(this, "Error",

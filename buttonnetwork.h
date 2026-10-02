@@ -34,6 +34,7 @@ public:
     // UI helpers / actions
     void clearNetwork();
     void setSolverMode(const QString& mode);
+    void setGraphStyle(const QString& style);
     void setTimeLimit(int t);
     void setAlpha2ScanRange(double minVal, double maxVal, double stepVal);
     void setAlpha2ScanSampling(int transientPercent, int sampleStride);
@@ -58,6 +59,7 @@ private slots:
     void buttonClicked();
 
 private:
+    QString graphStyle = "Point";
     // Build / edit connections
     void showFunctionDialog(QPushButton* start, QPushButton* end);
     QString buildTerm(const QString& from, const QString& to,

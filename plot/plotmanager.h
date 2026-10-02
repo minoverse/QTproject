@@ -14,10 +14,10 @@ struct PlotResult
 class PlotManager
 {
 public:
-    static bool generateTimeSeriesScript(const QString& runDir);
+    static bool generateTimeSeriesScript(const QString& runDir, const QString& style);
     static bool generateAlpha2ScanScript(const QString& runDir);
 
-    static PlotResult runTimeSeriesPlot(const QString& runDir);
+    static PlotResult runTimeSeriesPlot(const QString& runDir, const QString& style);
     static PlotResult runAlpha2ScanPlot(const QString& runDir);
 
 private:

@@ -11,6 +11,8 @@
 #include <QSpinBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QRadioButton>
+#include <QButtonGroup>
 
 int main(int argc, char *argv[])
 {
@@ -42,6 +44,22 @@ int main(int argc, char *argv[])
     solverCombo->addItem("ODE");
     solverCombo->addItem("GAMMA");
 
+    auto *pointRadio = new QRadioButton("Point");
+    auto *lineRadio  = new QRadioButton("Line");
+    auto *bothRadio  = new QRadioButton("Both");
+
+    auto *plotStyleGroup = new QButtonGroup(&window);
+    plotStyleGroup->addButton(pointRadio);
+    plotStyleGroup->addButton(lineRadio);
+    plotStyleGroup->addButton(bothRadio);
+
+    pointRadio->setChecked(true);
+
+    auto *plotStyleLayout = new QHBoxLayout();
+    plotStyleLayout->addWidget(pointRadio);
+    plotStyleLayout->addWidget(lineRadio);
+    plotStyleLayout->addWidget(bothRadio);
+
     auto *stepsSpin = new QSpinBox();
     stepsSpin->setRange(10, 50000);
     stepsSpin->setValue(800);
@@ -62,6 +80,9 @@ int main(int argc, char *argv[])
 
     boxL->addWidget(new QLabel("Solver"));
     boxL->addWidget(solverCombo);
+
+    boxL->addWidget(new QLabel("Plot Style"));
+    boxL->addLayout(plotStyleLayout);
 
     boxL->addWidget(new QLabel("tMax (steps)"));
     boxL->addWidget(stepsSpin);
@@ -92,6 +113,24 @@ int main(int argc, char *argv[])
     // Wiring
     QObject::connect(solverCombo, &QComboBox::currentTextChanged,
                      net, &ButtonNetwork::setSolverMode);
+
+    QObject::connect(pointRadio, &QRadioButton::toggled,
+                     [=](bool checked) {
+                         if (checked)
+                             net->setGraphStyle("Point");
+                     });
+
+    QObject::connect(lineRadio, &QRadioButton::toggled,
+                     [=](bool checked) {
+                         if (checked)
+                             net->setGraphStyle("Line");
+                     });
+
+    QObject::connect(bothRadio, &QRadioButton::toggled,
+                     [=](bool checked) {
+                         if (checked)
+                             net->setGraphStyle("Both");
+                     });
     QObject::connect(stepsSpin, QOverload<int>::of(&QSpinBox::valueChanged),
                      net, &ButtonNetwork::setTimeLimit);
 

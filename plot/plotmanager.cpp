@@ -5,7 +5,20 @@
 #include <QProcess>
 #include <QTextStream>
 
-bool PlotManager::generateTimeSeriesScript(const QString& runDir)
+static QString plotStyle(const QString& style)
+{
+    if (style == "Point")
+        return "with points pt 7 ps 0.5";
+
+    if (style == "Both")
+        return "with linespoints linewidth 1 pt 7 ps 0.4";
+
+    return "with lines linewidth 2";
+}
+
+bool PlotManager::generateTimeSeriesScript(
+    const QString& runDir,
+    const QString& style)
 {
     QFile script(QDir(runDir).filePath("plot.gnu"));
 
@@ -26,7 +39,7 @@ bool PlotManager::generateTimeSeriesScript(const QString& runDir)
     for (int i = 1; i <= 5; ++i) {
         out << "set ylabel 'y" << i << "'\n";
         out << "plot 'result.dat' using 0:" << i
-            << " with lines linewidth 2 title 'y" << i << "'\n\n";
+            << " " << plotStyle(style) << " title 'y" << i << "'\n\n";
     }
 
     out << "unset multiplot\n";
@@ -44,7 +57,7 @@ bool PlotManager::generateTimeSeriesScript(const QString& runDir)
         out << "set title 'y" << i << "'\n";
         out << "set ylabel 'y" << i << "'\n";
         out << "plot 'result.dat' using 0:" << i
-            << " with lines linewidth 2 title 'y" << i << "'\n";
+            << " " << plotStyle(style) << " title 'y" << i << "'\n";
         out << "set output\n\n";
     }
 
@@ -115,11 +128,13 @@ PlotResult PlotManager::runGnuplot(const QString& runDir,
     return result;
 }
 
-PlotResult PlotManager::runTimeSeriesPlot(const QString& runDir)
+PlotResult PlotManager::runTimeSeriesPlot(
+    const QString& runDir,
+    const QString& style)
 {
     PlotResult result;
 
-    if (!generateTimeSeriesScript(runDir)) {
+    if (!generateTimeSeriesScript(runDir, style)) {
         result.errorMessage = "Cannot create plot.gnu";
         return result;
     }
