@@ -1,4 +1,4 @@
-QT += core gui widgets
+QT += core gui widgets charts
 
 CONFIG += c++11
 
@@ -14,6 +14,7 @@ SOURCES += \
     output/resultwriter.cpp \
     validation/validationrunner.cpp \
     plot/plotmanager.cpp \
+    plot/interactiveplotwindow.cpp \
     analysis/alpha2scanner.cpp
 
 HEADERS += \
@@ -24,6 +25,7 @@ HEADERS += \
     output/resultwriter.h \
     validation/validationrunner.h \
     plot/plotmanager.h \
+    plot/interactiveplotwindow.h \
     analysis/alpha2scanner.h
 
 LIBS += -lgsl -lgslcblas -lm

@@ -42,6 +42,7 @@ public:
 public slots:
     void computeResults();
     void showGraph();
+    void showInteractivePlot();
     void showTable();
     void scanAlpha2();
 

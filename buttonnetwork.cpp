@@ -1,5 +1,6 @@
 #include "analysis/alpha2scanner.h"
 #include "plot/plotmanager.h"
+#include "plot/interactiveplotwindow.h"
 #include "buttonnetwork.h"
 #include "output/resultwriter.h"
 #include "validation/validationrunner.h"
@@ -483,6 +484,35 @@ void ButtonNetwork::showGraph()
 }
 
 // ================= Alpha2 scan =================
+
+
+void ButtonNetwork::showInteractivePlot()
+{
+    if (currentRunDir.isEmpty()) {
+        QMessageBox::warning(
+            this,
+            "Interactive Plot",
+            "Run a simulation first.");
+        return;
+    }
+
+    QFile file(runPath("result.dat"));
+
+    if (!file.exists()) {
+        QMessageBox::warning(
+            this,
+            "Interactive Plot",
+            "result.dat not found. Run a simulation first.");
+        return;
+    }
+
+    auto* window =
+        new InteractivePlotWindow(
+            currentRunDir,
+            graphStyle);
+
+    window->show();
+}
 
 void ButtonNetwork::scanAlpha2()
 {

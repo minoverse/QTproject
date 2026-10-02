@@ -73,6 +73,7 @@ int main(int argc, char *argv[])
 
     auto *btnCompute = new QPushButton("Compute");
     auto *btnGraph   = new QPushButton("Graph (y_all.png)");
+    auto *btnInteractive = new QPushButton("Interactive Plot");
     auto *btnTable   = new QPushButton("Show Table");
     auto *btnScanA2  = new QPushButton("Alpha2 Scan (PNG)");
     auto *btnAuto    = new QPushButton("AUTO Test Preset");
@@ -99,6 +100,7 @@ int main(int argc, char *argv[])
     boxL->addSpacing(8);
     boxL->addWidget(btnCompute);
     boxL->addWidget(btnGraph);
+    boxL->addWidget(btnInteractive);
     boxL->addWidget(btnTable);
     boxL->addWidget(btnScanA2);
     boxL->addWidget(btnAuto);
@@ -149,6 +151,8 @@ int main(int argc, char *argv[])
 
     QObject::connect(btnCompute, &QPushButton::clicked, net, &ButtonNetwork::computeResults);
     QObject::connect(btnGraph,   &QPushButton::clicked, net, &ButtonNetwork::showGraph);
+    QObject::connect(btnInteractive, &QPushButton::clicked,
+                     net, &ButtonNetwork::showInteractivePlot);
     QObject::connect(btnTable,   &QPushButton::clicked, net, &ButtonNetwork::showTable);
     QObject::connect(btnScanA2,  &QPushButton::clicked, net, &ButtonNetwork::scanAlpha2);
     QObject::connect(btnAuto,    &QPushButton::clicked, net, &ButtonNetwork::runAutoTestNode5Preset);
