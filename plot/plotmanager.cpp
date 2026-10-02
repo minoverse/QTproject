@@ -5,15 +5,37 @@
 #include <QProcess>
 #include <QTextStream>
 
-static QString plotStyle(const QString& style)
+static QString plotCommand(int column,
+                           const QString& title,
+                           const QString& style)
 {
-    if (style == "Point")
-        return "with points pt 7 ps 0.5";
+    if (style == "Point") {
+        return QString(
+            "plot 'result.dat' using 0:%1 "
+            "with points pt 7 ps 0.5 lc rgb 'green' "
+            "title '%2'\n")
+            .arg(column)
+            .arg(title);
+    }
 
-    if (style == "Both")
-        return "with linespoints linewidth 1 pt 7 ps 0.4";
+    if (style == "Both") {
+        return QString(
+            "plot 'result.dat' using 0:%1 "
+            "with lines linewidth 1.5 lc rgb 'blue' "
+            "title '%2', "
+            "'result.dat' using 0:%1 "
+            "with points pt 7 ps 0.4 lc rgb 'green' "
+            "notitle\n")
+            .arg(column)
+            .arg(title);
+    }
 
-    return "with lines linewidth 2";
+    return QString(
+        "plot 'result.dat' using 0:%1 "
+        "with lines linewidth 1.5 lc rgb 'blue' "
+        "title '%2'\n")
+        .arg(column)
+        .arg(title);
 }
 
 bool PlotManager::generateTimeSeriesScript(
@@ -38,8 +60,10 @@ bool PlotManager::generateTimeSeriesScript(
 
     for (int i = 1; i <= 5; ++i) {
         out << "set ylabel 'y" << i << "'\n";
-        out << "plot 'result.dat' using 0:" << i
-            << " " << plotStyle(style) << " title 'y" << i << "'\n\n";
+        out << plotCommand(
+            i,
+            QString("y%1").arg(i),
+            style) << "\n";
     }
 
     out << "unset multiplot\n";
@@ -56,8 +80,10 @@ bool PlotManager::generateTimeSeriesScript(
         out << "set output 'y" << i << ".png'\n";
         out << "set title 'y" << i << "'\n";
         out << "set ylabel 'y" << i << "'\n";
-        out << "plot 'result.dat' using 0:" << i
-            << " " << plotStyle(style) << " title 'y" << i << "'\n";
+        out << plotCommand(
+            i,
+            QString("y%1").arg(i),
+            style);
         out << "set output\n\n";
     }
 
