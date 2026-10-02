@@ -43,6 +43,7 @@ public slots:
     void computeResults();
     void showGraph();
     void showInteractivePlot();
+    void showPhasePlot();
     void showTable();
     void scanAlpha2();
 

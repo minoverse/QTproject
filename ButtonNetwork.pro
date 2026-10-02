@@ -15,6 +15,7 @@ SOURCES += \
     validation/validationrunner.cpp \
     plot/plotmanager.cpp \
     plot/interactiveplotwindow.cpp \
+    plot/phaseplotwindow.cpp \
     analysis/alpha2scanner.cpp
 
 HEADERS += \
@@ -26,6 +27,7 @@ HEADERS += \
     validation/validationrunner.h \
     plot/plotmanager.h \
     plot/interactiveplotwindow.h \
+    plot/phaseplotwindow.h \
     analysis/alpha2scanner.h
 
 LIBS += -lgsl -lgslcblas -lm

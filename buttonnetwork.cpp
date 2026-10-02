@@ -1,6 +1,7 @@
 #include "analysis/alpha2scanner.h"
 #include "plot/plotmanager.h"
 #include "plot/interactiveplotwindow.h"
+#include "plot/phaseplotwindow.h"
 #include "buttonnetwork.h"
 #include "output/resultwriter.h"
 #include "validation/validationrunner.h"
@@ -508,6 +509,35 @@ void ButtonNetwork::showInteractivePlot()
 
     auto* window =
         new InteractivePlotWindow(
+            currentRunDir,
+            graphStyle);
+
+    window->show();
+}
+
+
+void ButtonNetwork::showPhasePlot()
+{
+    if (currentRunDir.isEmpty()) {
+        QMessageBox::warning(
+            this,
+            "Phase Plot",
+            "Run a simulation first.");
+        return;
+    }
+
+    QFile file(runPath("result.dat"));
+
+    if (!file.exists()) {
+        QMessageBox::warning(
+            this,
+            "Phase Plot",
+            "result.dat not found.");
+        return;
+    }
+
+    auto* window =
+        new PhasePlotWindow(
             currentRunDir,
             graphStyle);
 
