@@ -1,7 +1,10 @@
 #include "analysis/alpha2scanner.h"
+#include "analysis/fftanalyzer.h"
 #include "plot/plotmanager.h"
 #include "plot/interactiveplotwindow.h"
 #include "plot/phaseplotwindow.h"
+#include "plot/fftplotwindow.h"
+#include "plot/fftanimationwindow.h"
 #include "buttonnetwork.h"
 #include "output/resultwriter.h"
 #include "validation/validationrunner.h"
@@ -538,6 +541,78 @@ void ButtonNetwork::showPhasePlot()
 
     auto* window =
         new PhasePlotWindow(
+            currentRunDir,
+            graphStyle);
+
+    window->show();
+}
+
+
+void ButtonNetwork::showFFTPlot()
+{
+    if (currentRunDir.isEmpty()) {
+        QMessageBox::warning(
+            this,
+            "FFT",
+            "Run a simulation first.");
+        return;
+    }
+
+    QFile resultFile(runPath("result.dat"));
+
+    if (!resultFile.exists()) {
+        QMessageBox::warning(
+            this,
+            "FFT",
+            "result.dat not found.");
+        return;
+    }
+
+    const FFTAnalysisResult fftResult =
+        FFTAnalyzer::analyze(currentRunDir);
+
+    if (!fftResult.success) {
+        QMessageBox::critical(
+            this,
+            "FFT",
+            fftResult.errorMessage);
+        return;
+    }
+
+    emit fileSaved(fftResult.outputFile);
+
+    auto* window =
+        new FFTPlotWindow(
+            fftResult.outputFile,
+            graphStyle);
+
+    window->show();
+}
+
+
+void ButtonNetwork::showFFTAnimation()
+{
+    if (currentRunDir.isEmpty()) {
+        QMessageBox::warning(
+            this,
+            "FFT Animation",
+            "Run a simulation first.");
+        return;
+    }
+
+    QFile resultFile(
+        runPath("result.dat"));
+
+    if (!resultFile.exists()) {
+        QMessageBox::warning(
+            this,
+            "FFT Animation",
+            "result.dat not found.");
+        return;
+    }
+
+    auto* window =
+        new FFTAnimationWindow(
             currentRunDir,
             graphStyle);
 

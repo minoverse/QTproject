@@ -16,7 +16,10 @@ SOURCES += \
     plot/plotmanager.cpp \
     plot/interactiveplotwindow.cpp \
     plot/phaseplotwindow.cpp \
-    analysis/alpha2scanner.cpp
+    plot/fftplotwindow.cpp \
+    plot/fftanimationwindow.cpp \
+    analysis/alpha2scanner.cpp \
+    analysis/fftanalyzer.cpp
 
 HEADERS += \
     buttonnetwork.h \
@@ -28,6 +31,9 @@ HEADERS += \
     plot/plotmanager.h \
     plot/interactiveplotwindow.h \
     plot/phaseplotwindow.h \
-    analysis/alpha2scanner.h
+    plot/fftplotwindow.h \
+    plot/fftanimationwindow.h \
+    analysis/alpha2scanner.h \
+    analysis/fftanalyzer.h
 
-LIBS += -lgsl -lgslcblas -lm
+LIBS += -lgsl -lgslcblas -lfftw3 -lm

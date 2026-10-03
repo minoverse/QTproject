@@ -75,6 +75,8 @@ int main(int argc, char *argv[])
     auto *btnGraph   = new QPushButton("Graph (y_all.png)");
     auto *btnInteractive = new QPushButton("Interactive Plot");
     auto *btnPhasePlot = new QPushButton("Phase Plot");
+    auto *btnFFT = new QPushButton("FFT");
+    auto *btnFFTAnimation = new QPushButton("FFT Animation (30s)");
     auto *btnTable   = new QPushButton("Show Table");
     auto *btnScanA2  = new QPushButton("Alpha2 Scan (PNG)");
     auto *btnAuto    = new QPushButton("AUTO Test Preset");
@@ -103,6 +105,8 @@ int main(int argc, char *argv[])
     boxL->addWidget(btnGraph);
     boxL->addWidget(btnInteractive);
     boxL->addWidget(btnPhasePlot);
+    boxL->addWidget(btnFFT);
+    boxL->addWidget(btnFFTAnimation);
     boxL->addWidget(btnTable);
     boxL->addWidget(btnScanA2);
     boxL->addWidget(btnAuto);
@@ -157,6 +161,10 @@ int main(int argc, char *argv[])
                      net, &ButtonNetwork::showInteractivePlot);
     QObject::connect(btnPhasePlot, &QPushButton::clicked,
                      net, &ButtonNetwork::showPhasePlot);
+    QObject::connect(btnFFT, &QPushButton::clicked,
+                     net, &ButtonNetwork::showFFTPlot);
+    QObject::connect(btnFFTAnimation, &QPushButton::clicked,
+                     net, &ButtonNetwork::showFFTAnimation);
     QObject::connect(btnTable,   &QPushButton::clicked, net, &ButtonNetwork::showTable);
     QObject::connect(btnScanA2,  &QPushButton::clicked, net, &ButtonNetwork::scanAlpha2);
     QObject::connect(btnAuto,    &QPushButton::clicked, net, &ButtonNetwork::runAutoTestNode5Preset);
