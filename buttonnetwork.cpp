@@ -5,6 +5,7 @@
 #include "plot/phaseplotwindow.h"
 #include "plot/fftplotwindow.h"
 #include "plot/fftanimationwindow.h"
+#include "plot/bifurcationwindow.h"
 #include "buttonnetwork.h"
 #include "output/resultwriter.h"
 #include "validation/validationrunner.h"
@@ -614,6 +615,39 @@ void ButtonNetwork::showFFTAnimation()
     auto* window =
         new FFTAnimationWindow(
             currentRunDir,
+            graphStyle);
+
+    window->show();
+}
+
+
+void ButtonNetwork::showBifurcationAnimation()
+{
+    if (currentRunDir.isEmpty()) {
+        QMessageBox::warning(
+            this,
+            "Bifurcation Diagram",
+            "Run a simulation first.");
+        return;
+    }
+
+    const QString dataFile =
+        runPath("alpha2_scan_2d.dat");
+
+    QFile file(dataFile);
+
+    if (!file.exists()) {
+        QMessageBox::warning(
+            this,
+            "Bifurcation Diagram",
+            "alpha2_scan_2d.dat not found. "
+            "Run Bifurcation Diagram generation first.");
+        return;
+    }
+
+    auto* window =
+        new BifurcationWindow(
+            dataFile,
             graphStyle);
 
     window->show();

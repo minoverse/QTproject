@@ -46,6 +46,7 @@ public slots:
     void showPhasePlot();
     void showFFTPlot();
     void showFFTAnimation();
+    void showBifurcationAnimation();
     void showTable();
     void scanAlpha2();
 

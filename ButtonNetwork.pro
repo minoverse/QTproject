@@ -18,6 +18,7 @@ SOURCES += \
     plot/phaseplotwindow.cpp \
     plot/fftplotwindow.cpp \
     plot/fftanimationwindow.cpp \
+    plot/bifurcationwindow.cpp \
     analysis/alpha2scanner.cpp \
     analysis/fftanalyzer.cpp
 
@@ -33,6 +34,7 @@ HEADERS += \
     plot/phaseplotwindow.h \
     plot/fftplotwindow.h \
     plot/fftanimationwindow.h \
+    plot/bifurcationwindow.h \
     analysis/alpha2scanner.h \
     analysis/fftanalyzer.h
 

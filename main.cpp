@@ -7,6 +7,8 @@
 #include <QPushButton>
 #include <QTextEdit>
 #include <QGroupBox>
+#include <QScrollArea>
+#include <QScreen>
 #include <QLabel>
 #include <QSpinBox>
 #include <QComboBox>
@@ -20,7 +22,12 @@ int main(int argc, char *argv[])
 
     QWidget window;
     window.setWindowTitle("Hopfield Button Network (Debian/Qt)");
-    window.resize(1200, 700);
+    if (QScreen *screen = QApplication::primaryScreen()) {
+        const QRect available = screen->availableGeometry();
+        window.resize(
+            qMin(1200, available.width()),
+            qMin(850, available.height()));
+    }
 
     auto *root = new QHBoxLayout(&window);
 
@@ -78,7 +85,8 @@ int main(int argc, char *argv[])
     auto *btnFFT = new QPushButton("FFT");
     auto *btnFFTAnimation = new QPushButton("FFT Animation (30s)");
     auto *btnTable   = new QPushButton("Show Table");
-    auto *btnScanA2  = new QPushButton("Alpha2 Scan (PNG)");
+    auto *btnScanA2  = new QPushButton("Bifurcation Diagram (Generate)");
+    auto *btnBifurcationAnimation = new QPushButton("Bifurcation Animation (30s)");
     auto *btnAuto    = new QPushButton("AUTO Test Preset");
     auto *btnClear   = new QPushButton("Clear Network");
 
@@ -109,10 +117,17 @@ int main(int argc, char *argv[])
     boxL->addWidget(btnFFTAnimation);
     boxL->addWidget(btnTable);
     boxL->addWidget(btnScanA2);
+    boxL->addWidget(btnBifurcationAnimation);
     boxL->addWidget(btnAuto);
     boxL->addWidget(btnClear);
 
-    right->addWidget(box);
+    auto *controlsScroll = new QScrollArea();
+    controlsScroll->setWidgetResizable(true);
+    controlsScroll->setFrameShape(QFrame::NoFrame);
+    controlsScroll->setWidget(box);
+    controlsScroll->setMinimumHeight(350);
+
+    right->addWidget(controlsScroll, 1);
     right->addWidget(log, 1);
 
     root->addWidget(net, 1);
@@ -167,6 +182,8 @@ int main(int argc, char *argv[])
                      net, &ButtonNetwork::showFFTAnimation);
     QObject::connect(btnTable,   &QPushButton::clicked, net, &ButtonNetwork::showTable);
     QObject::connect(btnScanA2,  &QPushButton::clicked, net, &ButtonNetwork::scanAlpha2);
+    QObject::connect(btnBifurcationAnimation, &QPushButton::clicked,
+                     net, &ButtonNetwork::showBifurcationAnimation);
     QObject::connect(btnAuto,    &QPushButton::clicked, net, &ButtonNetwork::runAutoTestNode5Preset);
     QObject::connect(btnClear,   &QPushButton::clicked, net, &ButtonNetwork::clearNetwork);
 
