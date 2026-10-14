@@ -1,0 +1,196 @@
+#include "buttonnetwork.h"
+
+#include <QApplication>
+#include <QWidget>
+#include <QHBoxLayout>
+#include <QVBoxLayout>
+#include <QPushButton>
+#include <QTextEdit>
+#include <QGroupBox>
+#include <QScrollArea>
+#include <QScreen>
+#include <QLabel>
+#include <QSpinBox>
+#include <QComboBox>
+#include <QDoubleSpinBox>
+#include <QRadioButton>
+#include <QButtonGroup>
+
+int main(int argc, char *argv[])
+{
+    QApplication a(argc, argv);
+
+    QWidget window;
+    window.setWindowTitle("Hopfield Button Network (Debian/Qt)");
+    if (QScreen *screen = QApplication::primaryScreen()) {
+        const QRect available = screen->availableGeometry();
+        window.resize(
+            qMin(1200, available.width()),
+            qMin(850, available.height()));
+    }
+
+    auto *root = new QHBoxLayout(&window);
+
+    // Left: network canvas
+    auto *net = new ButtonNetwork();
+    net->setMinimumSize(700, 650);
+
+    // Right: controls + log/table viewer
+    auto *right = new QVBoxLayout();
+    auto *log = new QTextEdit();
+    log->setReadOnly(true);
+    log->setPlaceholderText("Logs / output table / gnuplot errors...");
+
+    net->updateEquationEditor(log);
+
+    // Controls box
+    auto *box = new QGroupBox("Controls");
+    auto *boxL = new QVBoxLayout(box);
+
+    auto *solverCombo = new QComboBox();
+    solverCombo->addItem("ODE");
+    solverCombo->addItem("GAMMA");
+
+    auto *pointRadio = new QRadioButton("Point");
+    auto *lineRadio  = new QRadioButton("Line");
+    auto *bothRadio  = new QRadioButton("Both");
+
+    auto *plotStyleGroup = new QButtonGroup(&window);
+    plotStyleGroup->addButton(pointRadio);
+    plotStyleGroup->addButton(lineRadio);
+    plotStyleGroup->addButton(bothRadio);
+
+    pointRadio->setChecked(true);
+
+    auto *plotStyleLayout = new QHBoxLayout();
+    plotStyleLayout->addWidget(pointRadio);
+    plotStyleLayout->addWidget(lineRadio);
+    plotStyleLayout->addWidget(bothRadio);
+
+    auto *stepsSpin = new QSpinBox();
+    stepsSpin->setRange(10, 50000);
+    stepsSpin->setValue(800);
+
+    auto *a2Min = new QDoubleSpinBox(); a2Min->setRange(-1000, 1000); a2Min->setValue(-10.0);
+    auto *a2Max = new QDoubleSpinBox(); a2Max->setRange(-1000, 1000); a2Max->setValue( 10.0);
+    auto *a2Step= new QDoubleSpinBox(); a2Step->setRange(0.0001, 1000); a2Step->setDecimals(4); a2Step->setValue(0.5);
+
+    auto *transientSpin = new QSpinBox(); transientSpin->setRange(0, 99); transientSpin->setValue(70);
+    auto *strideSpin    = new QSpinBox(); strideSpin->setRange(1, 10000); strideSpin->setValue(20);
+
+    auto *btnCompute = new QPushButton("Compute");
+    auto *btnGraph   = new QPushButton("Graph (y_all.png)");
+    auto *btnInteractive = new QPushButton("Interactive Plot");
+    auto *btnPhasePlot = new QPushButton("Phase Plot");
+    auto *btnFFT = new QPushButton("FFT");
+    auto *btnFFTAnimation = new QPushButton("FFT Animation (30s)");
+    auto *btnTable   = new QPushButton("Show Table");
+    auto *btnScanA2  = new QPushButton("Bifurcation Diagram (Generate)");
+    auto *btnBifurcationAnimation = new QPushButton("Bifurcation Animation (30s)");
+    auto *btnAuto    = new QPushButton("AUTO Test Preset");
+    auto *btnClear   = new QPushButton("Clear Network");
+
+    boxL->addWidget(new QLabel("Solver"));
+    boxL->addWidget(solverCombo);
+
+    boxL->addWidget(new QLabel("Plot Style"));
+    boxL->addLayout(plotStyleLayout);
+
+    boxL->addWidget(new QLabel("tMax (steps)"));
+    boxL->addWidget(stepsSpin);
+
+    boxL->addWidget(new QLabel("alpha2 scan min / max / step"));
+    boxL->addWidget(a2Min);
+    boxL->addWidget(a2Max);
+    boxL->addWidget(a2Step);
+
+    boxL->addWidget(new QLabel("scan transient% / stride"));
+    boxL->addWidget(transientSpin);
+    boxL->addWidget(strideSpin);
+
+    boxL->addSpacing(8);
+    boxL->addWidget(btnCompute);
+    boxL->addWidget(btnGraph);
+    boxL->addWidget(btnInteractive);
+    boxL->addWidget(btnPhasePlot);
+    boxL->addWidget(btnFFT);
+    boxL->addWidget(btnFFTAnimation);
+    boxL->addWidget(btnTable);
+    boxL->addWidget(btnScanA2);
+    boxL->addWidget(btnBifurcationAnimation);
+    boxL->addWidget(btnAuto);
+    boxL->addWidget(btnClear);
+
+    auto *controlsScroll = new QScrollArea();
+    controlsScroll->setWidgetResizable(true);
+    controlsScroll->setFrameShape(QFrame::NoFrame);
+    controlsScroll->setWidget(box);
+    controlsScroll->setMinimumHeight(350);
+
+    right->addWidget(controlsScroll, 1);
+    right->addWidget(log, 1);
+
+    root->addWidget(net, 1);
+    root->addLayout(right, 0);
+
+    // Wiring
+    QObject::connect(solverCombo, &QComboBox::currentTextChanged,
+                     net, &ButtonNetwork::setSolverMode);
+
+    QObject::connect(pointRadio, &QRadioButton::toggled,
+                     [=](bool checked) {
+                         if (checked)
+                             net->setGraphStyle("Point");
+                     });
+
+    QObject::connect(lineRadio, &QRadioButton::toggled,
+                     [=](bool checked) {
+                         if (checked)
+                             net->setGraphStyle("Line");
+                     });
+
+    QObject::connect(bothRadio, &QRadioButton::toggled,
+                     [=](bool checked) {
+                         if (checked)
+                             net->setGraphStyle("Both");
+                     });
+    QObject::connect(stepsSpin, QOverload<int>::of(&QSpinBox::valueChanged),
+                     net, &ButtonNetwork::setTimeLimit);
+
+    auto applyScanSettings = [&]() {
+        net->setAlpha2ScanRange(a2Min->value(), a2Max->value(), a2Step->value());
+        net->setAlpha2ScanSampling(transientSpin->value(), strideSpin->value());
+    };
+
+    QObject::connect(a2Min,  QOverload<double>::of(&QDoubleSpinBox::valueChanged), [&](){ applyScanSettings(); });
+    QObject::connect(a2Max,  QOverload<double>::of(&QDoubleSpinBox::valueChanged), [&](){ applyScanSettings(); });
+    QObject::connect(a2Step, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [&](){ applyScanSettings(); });
+    QObject::connect(transientSpin, QOverload<int>::of(&QSpinBox::valueChanged), [&](){ applyScanSettings(); });
+    QObject::connect(strideSpin,    QOverload<int>::of(&QSpinBox::valueChanged), [&](){ applyScanSettings(); });
+
+    applyScanSettings();
+
+    QObject::connect(btnCompute, &QPushButton::clicked, net, &ButtonNetwork::computeResults);
+    QObject::connect(btnGraph,   &QPushButton::clicked, net, &ButtonNetwork::showGraph);
+    QObject::connect(btnInteractive, &QPushButton::clicked,
+                     net, &ButtonNetwork::showInteractivePlot);
+    QObject::connect(btnPhasePlot, &QPushButton::clicked,
+                     net, &ButtonNetwork::showPhasePlot);
+    QObject::connect(btnFFT, &QPushButton::clicked,
+                     net, &ButtonNetwork::showFFTPlot);
+    QObject::connect(btnFFTAnimation, &QPushButton::clicked,
+                     net, &ButtonNetwork::showFFTAnimation);
+    QObject::connect(btnTable,   &QPushButton::clicked, net, &ButtonNetwork::showTable);
+    QObject::connect(btnScanA2,  &QPushButton::clicked, net, &ButtonNetwork::scanAlpha2);
+    QObject::connect(btnBifurcationAnimation, &QPushButton::clicked,
+                     net, &ButtonNetwork::showBifurcationAnimation);
+    QObject::connect(btnAuto,    &QPushButton::clicked, net, &ButtonNetwork::runAutoTestNode5Preset);
+    QObject::connect(btnClear,   &QPushButton::clicked, net, &ButtonNetwork::clearNetwork);
+
+    QObject::connect(net, &ButtonNetwork::fileSaved, [&](const QString& p){
+        log->append("[saved] " + p);
+    });
+
+    window.show();
+    return a.exec();
+}
