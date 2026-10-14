@@ -30,6 +30,8 @@
 #include <QFileInfo>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QFutureWatcher>
+#include <QtConcurrent/QtConcurrentRun>
 #include <gsl/gsl_sf_gamma.h>
 #include <cmath>
 
@@ -623,6 +625,14 @@ void ButtonNetwork::showFFTAnimation()
 
 void ButtonNetwork::showBifurcationAnimation()
 {
+    if (alpha2ScanRunning) {
+        QMessageBox::information(
+            this,
+            "Bifurcation Animation",
+            "Bifurcation scan is still running.");
+        return;
+    }
+
     if (currentRunDir.isEmpty()) {
         QMessageBox::warning(
             this,
@@ -663,6 +673,14 @@ void ButtonNetwork::scanAlpha2()
 
 void ButtonNetwork::scanAlpha2ReuseCurrentRun()
 {
+    if (alpha2ScanRunning) {
+        QMessageBox::information(
+            this,
+            "Bifurcation Diagram",
+            "Bifurcation scan is already running.");
+        return;
+    }
+
     if (currentRunDir.isEmpty()) {
         QMessageBox::warning(
             this,
@@ -713,65 +731,133 @@ void ButtonNetwork::scanAlpha2ReuseCurrentRun()
     config.transientPercent = scanTransientPercent;
     config.sampleStride = scanSampleStride;
 
-    const Alpha2ScanResult scanResult =
-        Alpha2Scanner::run(
-            currentRunDir,
-            solver,
-            params,
-            buttons.size(),
-            solverConnections,
-            weightValues,
-            config);
+    // Copy everything needed by the worker.
+    // GUI-owned Solver/model/params are NOT used from the worker thread.
+    const QString runDir = currentRunDir;
+    const FiveNodeParameters paramsCopy = params;
+    const QMap<QString, double> weightsCopy = weightValues;
+    const int numNodes = buttons.size();
 
-    if (!scanResult.success) {
-        QMessageBox::critical(
-            this,
-            "Alpha2 scan",
-            scanResult.errorMessage);
-        return;
-    }
-
-    const PlotResult plotResult =
-        PlotManager::runAlpha2ScanPlot(currentRunDir);
-
-    QFile gpLog(runPath("alpha2_gnuplot_log.txt"));
-
-    if (gpLog.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QTextStream gl(&gpLog);
-
-        gl << "=== gnuplot stdout ===\n"
-           << plotResult.stdOut << "\n\n";
-
-        gl << "=== gnuplot stderr ===\n"
-           << plotResult.stdErr << "\n";
-    }
+    alpha2ScanRunning = true;
 
     if (equationEditor) {
-        if (!plotResult.stdErr.trimmed().isEmpty()) {
-            equationEditor->append(
-                "\n[gnuplot stderr]\n" + plotResult.stdErr);
-        }
-
-        if (!plotResult.stdOut.trimmed().isEmpty()) {
-            equationEditor->append(
-                "\n[gnuplot stdout]\n" + plotResult.stdOut);
-        }
+        equationEditor->append(
+            "\n[Bifurcation] Generating in background...");
     }
 
-    if (!plotResult.success) {
-        QMessageBox::warning(
-            this,
-            "Gnuplot",
-            "alpha2 scan data saved, but gnuplot failed.\n"
-            + plotResult.errorMessage);
-        return;
-    }
+    auto* watcher =
+        new QFutureWatcher<Alpha2ScanResult>(this);
 
-    for (int i = 1; i <= 5; ++i) {
-        emit fileSaved(
-            runPath(QString("alpha2_y%1.png").arg(i)));
-    }
+    connect(
+        watcher,
+        &QFutureWatcher<Alpha2ScanResult>::finished,
+        this,
+        [this, watcher, runDir]() {
+
+            const Alpha2ScanResult scanResult =
+                watcher->result();
+
+            watcher->deleteLater();
+            alpha2ScanRunning = false;
+
+            if (!scanResult.success) {
+                QMessageBox::critical(
+                    this,
+                    "Alpha2 scan",
+                    scanResult.errorMessage);
+                return;
+            }
+
+            const PlotResult plotResult =
+                PlotManager::runAlpha2ScanPlot(runDir);
+
+            QFile gpLog(
+                QDir(runDir)
+                    .filePath("alpha2_gnuplot_log.txt"));
+
+            if (gpLog.open(
+                    QIODevice::WriteOnly |
+                    QIODevice::Text)) {
+
+                QTextStream gl(&gpLog);
+
+                gl << "=== gnuplot stdout ===\n"
+                   << plotResult.stdOut
+                   << "\n\n";
+
+                gl << "=== gnuplot stderr ===\n"
+                   << plotResult.stdErr
+                   << "\n";
+            }
+
+            if (equationEditor) {
+                equationEditor->append(
+                    "\n[Bifurcation] Generation completed.");
+
+                if (!plotResult.stdErr.trimmed().isEmpty()) {
+                    equationEditor->append(
+                        "\n[gnuplot stderr]\n"
+                        + plotResult.stdErr);
+                }
+            }
+
+            if (!plotResult.success) {
+                QMessageBox::warning(
+                    this,
+                    "Gnuplot",
+                    "Alpha2 scan data saved, "
+                    "but gnuplot failed.\n"
+                    + plotResult.errorMessage);
+                return;
+            }
+
+            for (int i = 1; i <= 5; ++i) {
+                emit fileSaved(
+                    QDir(runDir).filePath(
+                        QString("alpha2_y%1.png")
+                            .arg(i)));
+            }
+
+            QMessageBox::information(
+                this,
+                "Bifurcation Diagram",
+                "Bifurcation generation completed.");
+        });
+
+    auto future =
+        QtConcurrent::run(
+            [runDir,
+             paramsCopy,
+             numNodes,
+             solverConnections,
+             weightsCopy,
+             config]() mutable
+            -> Alpha2ScanResult {
+
+                // Independent copies for the worker thread.
+                FiveNodeParameters workerParams =
+                    paramsCopy;
+
+                FiveNodeModel workerModel(
+                    workerParams);
+
+                Solver workerSolver(
+                    workerParams,
+                    workerModel);
+
+                return Alpha2Scanner::run(
+                    runDir,
+                    workerSolver,
+                    workerParams,
+                    numNodes,
+                    solverConnections,
+                    weightsCopy,
+                    config);
+            });
+
+    watcher->setFuture(future);
 }
+
 
 // ================= Click-edit connections =================
 
@@ -1055,7 +1141,6 @@ void ButtonNetwork::runAutoTestNode5Preset()
     const QString runDirFixed = currentRunDir;
     showTable();
     showGraph();
-    scanAlpha2ReuseCurrentRun();  // ADD THIS LINE - generates bifurcation diagrams
 
     // Copy to test files with alpha2 in filename
     QString a2str = QString::number(params.alpha2, 'f', 2).replace(".", "_");

@@ -37,3 +37,5 @@ result/
 results/
 *.bak_*
 CMakeLists.txt
+/vary_test/build/
+/vary_test/*.bak_*

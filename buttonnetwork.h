@@ -120,6 +120,7 @@ private:
     double scanAlpha2Step = 0.5;
     int scanTransientPercent = 70;
     int scanSampleStride = 20;
+    bool alpha2ScanRunning = false;
 
     // Saving folders
     QString baseResultDir;
