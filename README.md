@@ -537,3 +537,16 @@ This structure allows the model parameters, equations, numerical solver, output,
 - Result/table display in the GUI
 - Result export (`.dat`, `.csv`)
 - Gnuplot visualization
+
+## Experimental Dynamic Analysis
+
+Separate experimental framework in `dynamic_analysis/`.
+
+- validated core remains unchanged
+- dynamic bifurcation: alpha2 or nu x-axis
+- dynamic K-map
+- node isolation 1..5
+- manual sij cuts
+- AUTO mode
+- resumable completed cases
+- nu=0 skipped as SKIPPED_NU_ZERO
