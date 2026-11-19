@@ -550,3 +550,132 @@ Separate experimental framework in `dynamic_analysis/`.
 - AUTO mode
 - resumable completed cases
 - nu=0 skipped as SKIPPED_NU_ZERO
+---
+
+# Dynamic Chaos Analysis
+
+Additional experiments are implemented separately from the validated numerical core.
+The existing `model/`, `solver/`, and validation equations are not modified.
+
+The current analysis studies how `alpha2`, the fractional order `nu`, and selected
+connection cuts affect the network dynamics.
+
+## Parameter Grid
+
+```text
+alpha2 = -10, -9, ..., 10
+nu     = 0.1, 0.2, ..., 0.9
+```
+
+This gives 189 parameter points for each network configuration.
+
+The 0-1 chaos test is applied to `y1`.
+
+```text
+K near 0  -> regular dynamics
+K near 1  -> chaotic dynamics
+```
+
+Small negative K values can occur from the finite-data correlation calculation
+and are interpreted as values close to zero.
+
+## No-Cut and Connection-Cut Analysis
+
+The original network is used as the no-cut baseline.
+
+Five connection-cut configurations are compared over the same
+`(alpha2, nu)` parameter grid.
+
+The analysis includes:
+
+- no-cut and Cut A-E K maps
+- Delta-K comparison
+- fixed / periodic / chaotic classification
+- no-cut to cut state-transition analysis
+- representative time-series and P-Q validation
+- high-period raw-series verification
+
+## Delta-K Analysis
+
+```text
+Delta K = K_cut - K_no_cut
+```
+
+Interpretation:
+
+```text
+Delta K > 0  -> stronger chaotic tendency
+Delta K < 0  -> stronger regular tendency
+Delta K ~ 0  -> little change in the 0-1 chaos indicator
+```
+
+Delta-K alone is not used to distinguish fixed and periodic states.
+
+## State-Transition Results
+
+Point-by-point state comparisons show different dynamical effects for the
+five connection cuts.
+
+Current observations:
+
+```text
+Cut A : strongly chaos-promoting
+Cut B : strongest periodicity-promoting tendency
+Cut C : strongly chaos-promoting
+Cut D : mixed and parameter-dependent
+Cut E : intermediate mixed effect
+```
+
+For Cut A, all 189 tested parameter points satisfy the current chaotic
+classification criterion.
+
+Examples of evaluated state transitions include:
+
+```text
+Fixed    -> Periodic
+Fixed    -> Chaotic
+Periodic -> Fixed
+Periodic -> Chaotic
+Chaotic  -> Fixed
+Chaotic  -> Periodic
+Chaotic  -> Chaotic
+```
+
+## High-Period Validation
+
+Automatically detected high-period cases were rechecked directly using the
+existing raw `y1` time series.
+
+Candidate periods 1 through 16 were tested using normalized RMSE on the
+post-transient signal.
+
+Fifteen cases with originally detected periods 8, 10, 14, or 16 were checked.
+All 15 retained a verified minimum period greater than or equal to 8.
+
+Observed verified periods include:
+
+```text
+8
+10
+14
+16
+```
+
+Therefore, the current data do not support a universal assumption that all
+regular periodic cases have fewer than eight points.
+
+A rule that skips FFT solely because the period is assumed to be below 8
+cannot be applied globally without first determining the actual periodicity.
+
+## Experimental Analysis Files
+
+The experimental analysis is kept separately under:
+
+```text
+chaos_sweep/
+dynamic_analysis/
+```
+
+These experiments reuse the validated numerical core but do not modify its
+equations, Gamma/Beta logic, initial conditions, precision, or numerical
+evaluation order.

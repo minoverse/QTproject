@@ -62,13 +62,13 @@ def frange(start, stop, step):
     return values
 
 
-def node_cuts(node):
-    s = str(node)
-
-    return [
-        c for c in CONNECTIONS
-        if c[1] == s or c[2] == s
-    ]
+EDGE_CUTS = {
+    "A": ["s14", "s41"],
+    "B": ["s25", "s52"],
+    "C": ["s13", "s31"],
+    "D": ["s23", "s32"],
+    "E": ["s12", "s21"],
+}
 
 
 def parse_sij(text):
@@ -92,17 +92,16 @@ def parse_sij(text):
 
 
 def cut_sets(args):
-    if args.cut_mode == "node":
+    if args.cut_mode == "edge":
         return [
             (
-                f"node{args.node}",
-                node_cuts(args.node)
+                f"cut_{args.edge}",
+                EDGE_CUTS[args.edge]
             )
         ]
 
     if args.cut_mode == "sij":
         cuts = parse_sij(args.sij)
-
         return [
             (
                 "sij_" + "_".join(cuts),
@@ -112,10 +111,10 @@ def cut_sets(args):
 
     return [
         (
-            f"node{node}",
-            node_cuts(node)
+            f"cut_{edge}",
+            cuts
         )
-        for node in range(1, 6)
+        for edge, cuts in EDGE_CUTS.items()
     ]
 
 
@@ -878,29 +877,16 @@ def run_kmap(args, label, cuts):
 def add_common(parser):
     parser.add_argument(
         "--cut-mode",
-        choices=[
-            "node",
-            "sij",
-            "auto"
-        ],
+        choices=["edge", "sij", "auto"],
         required=True
     )
 
     parser.add_argument(
-        "--node",
-        type=int,
-        choices=[
-            1,
-            2,
-            3,
-            4,
-            5
-        ]
+        "--edge",
+        choices=["A", "B", "C", "D", "E"]
     )
 
-    parser.add_argument(
-        "--sij"
-    )
+    parser.add_argument("--sij")
 
     parser.add_argument(
         "--workers",
@@ -1060,9 +1046,9 @@ def ask(text, default):
 def interactive():
     print()
     print("CUT MODE")
-    print("1 = isolate one node")
+    print("1 = cut one pair A..E")
     print("2 = manual sij")
-    print("3 = AUTO node1..node5")
+    print("3 = AUTO A..E")
 
     mode = ask(
         "Select",
@@ -1070,16 +1056,16 @@ def interactive():
     )
 
     if mode == "1":
-        cut_mode = "node"
-        node = ask(
-            "Node 1..5",
-            1
-        )
+        cut_mode = "edge"
+        edge = ask(
+            "Cut A/B/C/D/E",
+            "A"
+        ).upper()
         sij = None
 
     elif mode == "2":
         cut_mode = "sij"
-        node = None
+        edge = None
         sij = ask(
             "Example s12,s31,s52",
             "s12"
@@ -1087,7 +1073,7 @@ def interactive():
 
     else:
         cut_mode = "auto"
-        node = None
+        edge = None
         sij = None
 
 
@@ -1126,10 +1112,10 @@ def interactive():
     ]
 
 
-    if node is not None:
+    if edge is not None:
         argv += [
-            "--node",
-            node
+            "--edge",
+            edge
         ]
 
 
@@ -1298,11 +1284,11 @@ def interactive():
 
 def validate(args):
     if (
-        args.cut_mode == "node"
-        and args.node is None
+        args.cut_mode == "edge"
+        and args.edge is None
     ):
         raise SystemExit(
-            "node mode needs --node"
+            "edge mode needs --edge"
         )
 
     if (
